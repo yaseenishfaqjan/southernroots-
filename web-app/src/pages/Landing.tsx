@@ -382,20 +382,93 @@ function CTA() {
 }
 
 function Footer() {
+  const cols: { title: string; links: { label: string; href: string }[] }[] = [
+    {
+      title: "Product",
+      links: [
+        { label: "Features", href: "#features" },
+        { label: "How it works", href: "#how" },
+        { label: "Pricing", href: "#pricing" },
+        { label: "AI Agents", href: "#features" },
+        { label: "Sign in", href: "/login" },
+      ],
+    },
+    {
+      title: "Industries",
+      links: [
+        { label: "Lawn Care", href: "#" },
+        { label: "Landscaping", href: "#" },
+        { label: "Pressure Washing", href: "#" },
+        { label: "Pest Control", href: "#" },
+        { label: "Pool Service", href: "#" },
+        { label: "Snow Removal", href: "#" },
+      ],
+    },
+    {
+      title: "Resources",
+      links: [
+        { label: "Get a free quote", href: "#" },
+        { label: "FAQ", href: "#" },
+        { label: "Blog", href: "#" },
+        { label: "Help center", href: "#" },
+        { label: "API docs", href: "#" },
+      ],
+    },
+    {
+      title: "Company",
+      links: [
+        { label: "About us", href: "#" },
+        { label: "Careers", href: "#" },
+        { label: "Contact", href: "#" },
+        { label: "Privacy", href: "#" },
+        { label: "Terms", href: "#" },
+      ],
+    },
+  ];
   return (
-    <footer className="border-t border-gray-200 bg-white py-10">
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 sm:flex-row">
-        <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-600">
-            <Leaf className="h-4 w-4 text-white" />
+    <footer className="bg-gray-900 text-gray-300">
+      <div className="mx-auto max-w-6xl px-5 py-14">
+        <div className="grid gap-10 md:grid-cols-5">
+          <div className="md:col-span-1">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-600">
+                <Leaf className="h-5 w-5 text-white" />
+              </div>
+              <span className="font-bold text-white">Southern Roots Turf</span>
+            </div>
+            <p className="mt-4 text-sm leading-relaxed text-gray-400">
+              The AI-native operating system for home & field-service businesses.
+              Quote, dispatch, bill, and retain — autonomously.
+            </p>
+            <Link
+              href="/signup"
+              className="mt-5 inline-flex rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
+            >
+              Start free trial
+            </Link>
           </div>
-          <span className="text-sm font-semibold text-gray-900">Southern Roots Turf</span>
+          {cols.map((c) => (
+            <div key={c.title}>
+              <h4 className="text-sm font-semibold text-white">{c.title}</h4>
+              <ul className="mt-4 space-y-2.5">
+                {c.links.map((l) =>
+                  l.href.startsWith("/") ? (
+                    <li key={l.label}>
+                      <Link href={l.href} className="text-sm text-gray-400 transition hover:text-white">{l.label}</Link>
+                    </li>
+                  ) : (
+                    <li key={l.label}>
+                      <a href={l.href} className="text-sm text-gray-400 transition hover:text-white">{l.label}</a>
+                    </li>
+                  )
+                )}
+              </ul>
+            </div>
+          ))}
         </div>
-        <p className="text-sm text-gray-500">© 2026 Southern Roots Turf. AI-native lawn care platform.</p>
-        <div className="flex gap-5 text-sm text-gray-500">
-          <a href="#features" className="hover:text-gray-900">Features</a>
-          <a href="#pricing" className="hover:text-gray-900">Pricing</a>
-          <Link href="/login" className="hover:text-gray-900">Sign in</Link>
+        <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-white/10 pt-6 text-sm text-gray-500 sm:flex-row">
+          <p>© 2026 Southern Roots Turf. All rights reserved.</p>
+          <p className="text-gray-500">Built with AI agents 🌱 · Made for operators</p>
         </div>
       </div>
     </footer>
