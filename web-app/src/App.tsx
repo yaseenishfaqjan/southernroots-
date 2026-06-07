@@ -2,6 +2,8 @@ import { Router, Switch, Route } from "wouter";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "./lib/auth";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Jobs from "./pages/Jobs";
@@ -11,9 +13,15 @@ import Invoices from "./pages/Invoices";
 import Escalations from "./pages/Escalations";
 import Decisions from "./pages/Decisions";
 import Dispatch from "./pages/Dispatch";
+import Billing from "./pages/Billing";
 
 export default function App() {
   const { user, loading } = useAuth();
+
+  // Public, no-auth pages reachable from email links.
+  const path = window.location.pathname;
+  if (path === "/reset-password") return <ResetPassword />;
+  if (path === "/verify-email") return <VerifyEmail />;
 
   if (loading) {
     return (
@@ -39,6 +47,7 @@ export default function App() {
           <Route path="/escalations" component={Escalations} />
           <Route path="/ai/decisions" component={Decisions} />
           <Route path="/dispatch" component={Dispatch} />
+          <Route path="/billing" component={Billing} />
         </Switch>
       </Layout>
     </Router>

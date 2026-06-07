@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
 import twilioLib from "twilio";
-import { db, invoicesTable, customersTable } from "@workspace/db";
+import { db, invoicesTable, customersTable, organizationsTable } from "@workspace/db";
 import { getStripe } from "../lib/stripe";
 import { handleInboundSms } from "../agents/communication-agent";
 import { sendSms } from "../lib/twilio";
@@ -43,7 +43,32 @@ router.post("/webhook/stripe", async (req, res): Promise<void> => {
 
   try {
     if (event.type === "checkout.session.completed") {
-      const session = event.data.object as { id: string; payment_status: string };
+      const session = event.data.object as {
+        id: string;
+        payment_status: string;
+        mode?: string;
+        customer?: string;
+        metadata?: { orgId?: string; plan?: string };
+      };
+
+      // Subscription checkout → activate the org's plan.
+      if (session.mode === "subscription") {
+        const orgId = Number(session.metadata?.orgId);
+        const plan = session.metadata?.plan;
+        if (orgId && plan) {
+          await db
+            .update(organizationsTable)
+            .set({
+              plan,
+              status: "active",
+              ...(session.customer ? { stripeCustomerId: session.customer } : {}),
+            })
+            .where(eq(organizationsTable.id, orgId));
+          logger.info({ orgId, plan }, "Org subscription activated via Stripe");
+        }
+        res.json({ received: true });
+        return;
+      }
 
       if (session.payment_status === "paid") {
         // Find invoice by stripeInvoiceId (session.id)
@@ -83,6 +108,18 @@ router.post("/webhook/stripe", async (req, res): Promise<void> => {
       // Handle Stripe Invoice (subscription) paid event
       const stripeInvoice = event.data.object as { id: string; customer: string };
       logger.info({ stripeInvoiceId: stripeInvoice.id }, "Stripe invoice.paid event received");
+    }
+
+    if (event.type === "customer.subscription.deleted") {
+      // Subscription cancelled → drop the org back to a cancelled state.
+      const sub = event.data.object as { customer: string };
+      if (sub.customer) {
+        await db
+          .update(organizationsTable)
+          .set({ plan: "trial", status: "cancelled" })
+          .where(eq(organizationsTable.stripeCustomerId, sub.customer));
+        logger.info({ customer: sub.customer }, "Org subscription cancelled");
+      }
     }
 
     res.json({ received: true });

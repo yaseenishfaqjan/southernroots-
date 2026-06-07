@@ -10,6 +10,7 @@ import {
   MapPin,
   Leaf,
   LogOut,
+  CreditCard,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAuth } from "../lib/auth";
@@ -23,6 +24,7 @@ const navItems = [
   { href: "/escalations", icon: AlertTriangle, label: "Escalations" },
   { href: "/dispatch", icon: MapPin, label: "Dispatch" },
   { href: "/ai/decisions", icon: Brain, label: "AI Decisions" },
+  { href: "/billing", icon: CreditCard, label: "Billing" },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {
