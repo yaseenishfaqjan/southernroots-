@@ -6,10 +6,20 @@ interface AiDecision {
   id: number;
   agent: string;
   input: unknown;
-  output: string;
+  output: unknown;
   reasoning: string | null;
   executedAt: string;
-  success: boolean;
+  success?: boolean;
+}
+
+function toText(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "string") return v;
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
 }
 
 const agentColors: Record<string, string> = {
@@ -34,7 +44,14 @@ function AgentBadge({ agent }: { agent: string }) {
 
 function CollapsibleJson({ data }: { data: unknown }) {
   const [open, setOpen] = useState(false);
-  const preview = JSON.stringify(data).slice(0, 60);
+  const full = (() => {
+    try {
+      return JSON.stringify(data ?? null, null, 2);
+    } catch {
+      return String(data);
+    }
+  })();
+  const preview = full.replace(/\s+/g, " ").slice(0, 60);
   return (
     <div>
       <button
@@ -45,7 +62,7 @@ function CollapsibleJson({ data }: { data: unknown }) {
       </button>
       {open && (
         <pre className="mt-2 text-xs bg-gray-50 rounded p-2 overflow-auto max-w-xs max-h-32 text-gray-600 border border-gray-200">
-          {JSON.stringify(data, null, 2)}
+          {full}
         </pre>
       )}
     </div>
@@ -55,7 +72,10 @@ function CollapsibleJson({ data }: { data: unknown }) {
 export default function Decisions() {
   const { data: decisions, isLoading } = useQuery<AiDecision[]>({
     queryKey: ["ai-decisions"],
-    queryFn: () => api.get("/ai/decisions"),
+    queryFn: async () => {
+      const r = await api.get<{ data: AiDecision[] } | AiDecision[]>("/ai/decisions");
+      return Array.isArray(r) ? r : r.data;
+    },
     refetchInterval: 30_000,
   });
 
@@ -99,7 +119,7 @@ export default function Decisions() {
               <tr key={d.id} className="hover:bg-gray-50 align-top">
                 <td className="px-6 py-4">
                   <AgentBadge agent={d.agent} />
-                  {!d.success && (
+                  {d.success === false && (
                     <div className="mt-1">
                       <span className="text-xs text-red-500">failed</span>
                     </div>
@@ -110,7 +130,7 @@ export default function Decisions() {
                 </td>
                 <td className="px-6 py-4 max-w-xs">
                   <p className="text-sm text-gray-700 line-clamp-3">
-                    {d.output}
+                    {toText(d.output)}
                   </p>
                 </td>
                 <td className="px-6 py-4 max-w-xs">
