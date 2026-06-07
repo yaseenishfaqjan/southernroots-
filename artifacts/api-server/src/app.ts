@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -26,7 +27,17 @@ app.use(
   })
 );
 
-app.use(cors());
+// Restrict CORS to configured origins (comma-separated). Falls back to
+// permissive mode only when CORS_ORIGINS is unset (local dev).
+const corsOrigins = process.env.CORS_ORIGINS?.split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+app.use(
+  cors({
+    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    credentials: true,
+  })
+);
 
 // Raw body needed for Stripe webhook signature verification — must come before express.json()
 app.use(
@@ -36,6 +47,7 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.use("/api", router);
 

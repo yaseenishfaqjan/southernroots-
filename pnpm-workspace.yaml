@@ -5,6 +5,11 @@ packages:
   - scripts
   - web-app
 
+allowBuilds:
+  esbuild: set this to true or false
+  msgpackr-extract: set this to true or false
+  puppeteer: set this to true or false
+
 autoInstallPeers: false
 
 catalog:

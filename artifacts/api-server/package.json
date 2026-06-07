@@ -7,6 +7,7 @@
     "dev": "node --env-file=../../.env --import tsx/esm ./src/index.ts",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
+    "create-owner": "node --env-file=../../.env --import tsx/esm ./src/scripts/create-owner.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

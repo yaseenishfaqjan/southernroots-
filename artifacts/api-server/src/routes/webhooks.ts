@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
+import twilioLib from "twilio";
 import { db, invoicesTable, customersTable } from "@workspace/db";
 import { getStripe } from "../lib/stripe";
 import { handleInboundSms } from "../agents/communication-agent";
@@ -15,7 +16,13 @@ router.post("/webhook/stripe", async (req, res): Promise<void> => {
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!webhookSecret) {
-    logger.warn("STRIPE_WEBHOOK_SECRET not set — skipping signature verification");
+    // Fail CLOSED in production — an unverified webhook can mark invoices paid.
+    if (process.env.NODE_ENV === "production") {
+      logger.error("STRIPE_WEBHOOK_SECRET not set in production — rejecting webhook");
+      res.status(500).json({ error: "Webhook not configured" });
+      return;
+    }
+    logger.warn("STRIPE_WEBHOOK_SECRET not set — skipping signature verification (dev only)");
     res.json({ received: true });
     return;
   }
@@ -88,6 +95,30 @@ router.post("/webhook/stripe", async (req, res): Promise<void> => {
 // POST /webhook/sms — Twilio inbound SMS webhook
 router.post("/webhook/sms", async (req, res): Promise<void> => {
   try {
+    // Verify the request really came from Twilio before acting on it.
+    // Without this, anyone can POST a spoofed "From" number and drive the
+    // communication agent to take DB actions on behalf of that customer.
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    if (authToken) {
+      const signature = (req.headers["x-twilio-signature"] as string | undefined) ?? "";
+      const url = `${process.env.APP_URL ?? ""}/api/webhook/sms`;
+      const valid = twilioLib.validateRequest(
+        authToken,
+        signature,
+        url,
+        req.body as Record<string, string>
+      );
+      if (!valid) {
+        logger.warn({ from: (req.body as Record<string, string>)?.From }, "Twilio webhook signature invalid");
+        res.status(403).send("Invalid signature");
+        return;
+      }
+    } else if (process.env.NODE_ENV === "production") {
+      logger.error("TWILIO_AUTH_TOKEN not set in production — rejecting webhook");
+      res.status(500).send("Webhook not configured");
+      return;
+    }
+
     // Twilio sends form-encoded body
     const from = (req.body as Record<string, string>)["From"] ?? "";
     const body = (req.body as Record<string, string>)["Body"] ?? "";
