@@ -33,7 +33,17 @@ const PatchWorkerBody = z.object({
 
 function formatWorker(row: typeof workersTable.$inferSelect) {
   return {
-    ...row,
+    id: row.id,
+    name: row.name,
+    phone: row.phone,
+    email: row.email,
+    specialty: row.specialty,
+    rating: row.rating,
+    completionRate: row.completionRate,
+    activeJobCount: row.currentJobCount,
+    todayJobCount: 0,
+    status: row.isActive ? "active" : "inactive",
+    homeAddress: row.homeAddress,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

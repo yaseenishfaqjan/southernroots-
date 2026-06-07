@@ -18,14 +18,15 @@ const statusColors: Record<string, string> = {
   inactive: "bg-gray-100 text-gray-500",
 };
 
-export default function StatusBadge({ status }: { status: string }) {
+export default function StatusBadge({ status }: { status?: string | null }) {
+  const s = status && status.length > 0 ? status : "—";
   return (
     <span
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-        statusColors[status] ?? "bg-gray-100 text-gray-600"
+        statusColors[s] ?? "bg-gray-100 text-gray-600"
       }`}
     >
-      {status.replace(/_/g, " ")}
+      {s.replace(/_/g, " ")}
     </span>
   );
 }
