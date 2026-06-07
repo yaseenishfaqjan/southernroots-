@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Greens Landscape"
+version = "1.0.0"
+id = "artifacts/greens-landscape"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21075
+
+[services.development]
+run = "pnpm --filter @workspace/greens-landscape run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/greens-landscape", "run", "build" ]
+publicDir = "artifacts/greens-landscape/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21075"
+BASE_PATH = "/"

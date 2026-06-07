@@ -1,0 +1,38 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "feJo3feE_7Gp1YpdGOZKm"
+uri = "file://artifacts/greens-landscape/public/images/hero.png"
+type = "image"
+title = "Hero landscape morning dew"
+
+[[generated]]
+id = "4-ENgwoliLCwQn10CBOho"
+uri = "file://artifacts/greens-landscape/public/images/landscaping.png"
+type = "image"
+title = "Professional hedge trimming"
+
+[[generated]]
+id = "U7P3QNl7pXo96BjYuBegL"
+uri = "file://artifacts/greens-landscape/public/images/pressure-washing.png"
+type = "image"
+title = "Pressure washing driveway"
+
+[[generated]]
+id = "HOgYA8164WCjTH2VnJ0oJ"
+uri = "file://artifacts/greens-landscape/public/images/maintenance.png"
+type = "image"
+title = "Ongoing yard care"
+
+[[generated]]
+id = "d_Ot9NW3GtJPbv89sKo-4"
+uri = "file://artifacts/lawn-quotes/public/images/hero-lawn.png"
+type = "image"
+title = "perfect lawn hero"
+
+[[generated]]
+id = "rAEw4iTAAnwoBh_ZTvpvU"
+uri = "file://artifacts/lawn-quotes/public/images/satellite-map.png"
+type = "image"
+title = "aerial satellite view house lawn"

@@ -1,0 +1,146 @@
+export default function GreensLandscapeWebsite() {
+  const services = [
+    {
+      title: 'Landscaping',
+      desc: 'Weekly mowing, hedge trimming, mulch installs, and full property cleanups done on schedule.',
+    },
+    {
+      title: 'Pressure Washing',
+      desc: 'Driveways, homes, patios, and walkways restored with professional-grade cleaning.',
+    },
+    {
+      title: 'Maintenance Plans',
+      desc: 'Monthly service plans so customers never have to think about their yard again.',
+    },
+  ];
+
+  const mockLeads = [
+    { name: 'John Carter', service: 'Driveway Wash', status: 'Quote Sent' },
+    { name: 'Ashley Moore', service: 'Lawn Care', status: 'Scheduled' },
+    { name: 'Mike Daniels', service: 'House Wash', status: 'New Lead' },
+  ];
+
+  const reviews = [
+    {
+      name: 'Homeowner - McDonough',
+      text: 'They turned my driveway from black to brand new in one visit. Highly recommend.',
+    },
+    {
+      name: 'Realtor - Atlanta',
+      text: 'Perfect for getting listings cleaned up fast before showings.',
+    },
+    {
+      name: 'Repeat Customer',
+      text: 'I use them monthly. Never have to follow up. Always done right.',
+    },
+  ];
+
+  return (
+    <div className="min-h-screen bg-white text-zinc-900">
+      {/* HEADER */}
+      <header className="sticky top-0 z-50 border-b bg-white">
+        <div className="mx-auto flex max-w-7xl justify-between px-6 py-4">
+          <div className="font-black">Green’s Landscape & Pressure Washing</div>
+          <div className="flex gap-4">
+            <button className="rounded-xl bg-green-700 px-4 py-2 text-white">Call Now</button>
+            <button className="rounded-xl border px-4 py-2">Get Quote</button>
+          </div>
+        </div>
+      </header>
+
+      {/* HERO */}
+      <section className="bg-green-50 py-20">
+        <div className="mx-auto max-w-6xl px-6 text-center">
+          <h1 className="text-5xl font-black">Make Your Property Look Brand New Again</h1>
+          <p className="mt-4 text-lg text-zinc-600">Fast quotes. Clean work. Reliable service.</p>
+          <div className="mt-6 flex justify-center gap-4">
+            <button className="rounded-xl bg-green-700 px-6 py-3 text-white">Request Quote</button>
+            <button className="rounded-xl border px-6 py-3">Call (678) 555-0199</button>
+          </div>
+        </div>
+      </section>
+
+      {/* SERVICES */}
+      <section className="mx-auto max-w-6xl px-6 py-16">
+        <h2 className="text-3xl font-black">Services</h2>
+        <div className="mt-6 grid md:grid-cols-3 gap-6">
+          {services.map((s) => (
+            <div key={s.title} className="border p-6 rounded-xl">
+              <h3 className="text-xl font-bold">{s.title}</h3>
+              <p className="mt-2 text-zinc-600">{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* BEFORE AFTER MOCK */}
+      <section className="bg-zinc-100 py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <h2 className="text-3xl font-black">Before & After Results</h2>
+          <div className="mt-6 grid md:grid-cols-3 gap-4">
+            {[1,2,3].map(i => (
+              <div key={i} className="h-48 bg-zinc-300 flex items-center justify-center">
+                Mock Image {i}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* MOCK DASHBOARD PREVIEW */}
+      <section className="mx-auto max-w-6xl px-6 py-16">
+        <h2 className="text-3xl font-black">Live Job & Lead Tracking</h2>
+        <div className="mt-6 border rounded-xl p-6">
+          {mockLeads.map((lead, i) => (
+            <div key={i} className="flex justify-between border-b py-2">
+              <span>{lead.name}</span>
+              <span>{lead.service}</span>
+              <span className="font-bold text-green-700">{lead.status}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* REVIEWS */}
+      <section className="bg-zinc-50 py-16">
+        <div className="mx-auto max-w-6xl px-6">
+          <h2 className="text-3xl font-black">Customer Reviews</h2>
+          <div className="mt-6 grid md:grid-cols-3 gap-6">
+            {reviews.map((r) => (
+              <div key={r.name} className="border p-6 rounded-xl">
+                <p>"{r.text}"</p>
+                <div className="mt-4 font-bold">{r.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* QUOTE FORM */}
+      <section className="mx-auto max-w-4xl px-6 py-16">
+        <h2 className="text-3xl font-black">Get a Free Quote</h2>
+        <div className="mt-6 space-y-4">
+          <input className="w-full border p-3" placeholder="Full Name" />
+          <input className="w-full border p-3" placeholder="Phone" />
+          <input className="w-full border p-3" placeholder="Address" />
+          <select className="w-full border p-3">
+            <option>Select Service</option>
+            <option>Pressure Washing</option>
+            <option>Landscaping</option>
+          </select>
+          <textarea className="w-full border p-3" placeholder="Details"></textarea>
+          <button className="w-full bg-green-700 text-white py-3">Submit Request</button>
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="bg-black text-white py-10">
+        <div className="text-center">
+          <div className="font-bold">Green’s Landscape & Pressure Washing</div>
+          <div className="text-sm mt-2">Serving Georgia & Surrounding Areas</div>
+          <div className="mt-2">(678) 555-0199</div>
+        </div>
+      </footer>
+    </div>
+  );
+}

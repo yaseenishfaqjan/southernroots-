@@ -1,0 +1,98 @@
+Build a professional SaaS-style web app for a landscaping and lawn care company powered by Blue Collar AI.
+
+App name: Blue Collar AI Lawn Intelligence Center.
+
+Main goal:
+Create a clickable demo showing how a lawn care company can use AI + maps to estimate property size, quote jobs, route crews, manage recurring services, and find new customers.
+
+Pages needed:
+
+1. Landing Page
+- Hero: “AI-Powered Lawn Care Estimates in Seconds”
+- CTA buttons: “Get Instant Lawn Quote” and “View Owner Dashboard”
+- Explain property analysis, address lookup, recurring maintenance plans, crew routing, and automated follow-up.
+
+2. Instant Lawn Quote Page
+- Address autocomplete
+- Fake property map preview
+- Inputs:
+  - Lawn mowing
+  - Landscaping
+  - Mulch installation
+  - Bush trimming
+  - Pressure washing
+  - Seasonal cleanup
+- AI output:
+  - Estimated lawn size
+  - Estimated driveway/sidewalk size
+  - Suggested service package
+  - One-time price
+  - Monthly maintenance price
+- Button: “Book Service”
+
+3. Route Optimization Page
+- Fake map showing daily jobs
+- Route order:
+  - Stop 1
+  - Stop 2
+  - Stop 3
+- Crew assignment
+- Estimated drive time
+- Fuel savings estimate
+- Button: “Optimize Route”
+
+4. Recurring Maintenance Dashboard
+- Customer list
+- Service frequency:
+  - Weekly
+  - Bi-weekly
+  - Monthly
+- Next service date
+- Payment status
+- Auto-reminder status
+
+5. Neighborhood Lead Map
+- Map with target neighborhoods
+- Lead cards:
+  - Address
+  - Estimated yard size
+  - Service opportunity
+  - AI priority score
+- Filters:
+  - Large yards
+  - Dirty driveways
+  - High-income neighborhood
+  - Existing customer nearby
+
+6. Owner Dashboard
+- KPIs:
+  - Quotes generated
+  - Recurring customers
+  - Route efficiency
+  - Monthly recurring revenue
+  - Crew utilization
+  - Upsell opportunities
+- Include revenue by neighborhood map.
+
+Design:
+- Clean green, white, charcoal, and blue accent
+- Modern SaaS dashboard feel
+- Professional but simple
+- Mobile responsive
+- Rounded cards and strong visual hierarchy
+
+Use fake data only.
+No live APIs yet.
+
+Future API placeholders:
+- Google Maps API
+- Google Places API
+- Google Geocoding API
+- Google Routes API
+- OpenAI API
+- GoHighLevel or Twilio
+- Stripe
+- Calendar booking API
+- Optional satellite/property measurement API
+
+Create a full clickable demo.

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/lawn-quotes/"
+title = "AI Lawn Quote System"
+version = "1.0.0"
+id = "artifacts/lawn-quotes"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/lawn-quotes/" ]
+localPort = 21194
+
+[services.development]
+run = "pnpm --filter @workspace/lawn-quotes run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lawn-quotes", "run", "build" ]
+publicDir = "artifacts/lawn-quotes/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21194"
+BASE_PATH = "/lawn-quotes/"

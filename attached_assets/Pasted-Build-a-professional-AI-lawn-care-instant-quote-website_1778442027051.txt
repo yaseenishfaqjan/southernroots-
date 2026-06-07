@@ -1,0 +1,166 @@
+Build a professional AI lawn care instant quote website for my lawn care business.
+
+The product should work like an AI lawn measurement and instant quote system. A customer enters their address, the system pulls satellite/aerial map imagery, detects the property, estimates lawn square footage, driveway/sidewalk area, house footprint, front yard, backyard, and tree-covered areas, then generates an instant lawn care quote.
+
+Do not copy Deep Lawn branding. Build my own version.
+
+Brand style:
+Green, black, white, light gray.
+Modern SaaS + lawn care look.
+Mobile-first.
+Professional, clean, high-converting.
+
+Core pages:
+1. Home page
+2. Instant quote page
+3. Services page
+4. Customer checkout page
+5. Admin dashboard
+6. AI assistant / owner briefing page
+
+Hero section:
+Headline: “Instant Lawn Care Quotes Powered by AI”
+Subheadline: “Enter your address, measure your property, choose your service, and book lawn care in under 60 seconds.”
+Buttons:
+- Get Instant Quote
+- See How It Works
+
+Instant Quote Flow:
+Create a multi-step quote widget.
+
+Step 1:
+Customer enters property address.
+Use placeholder integration for Google Places / Mapbox autocomplete.
+
+Step 2:
+Show satellite map preview of the property.
+Use placeholder image/map component for now.
+Add green polygon overlay showing detected lawn area.
+Add separate overlays for:
+- Lawn area
+- Front yard
+- Backyard
+- Driveway
+- Sidewalk
+- House footprint
+- Tree coverage risk area
+
+Step 3:
+Show AI measurement results:
+- Total lot size
+- Estimated mowable lawn sq ft
+- Front yard sq ft
+- Backyard sq ft
+- Driveway/sidewalk sq ft
+- House footprint sq ft
+- Tree coverage confidence score
+- Image date / imagery source placeholder
+
+Step 4:
+Let customer choose services:
+- Lawn mowing
+- Edging
+- Weed control
+- Fertilization
+- Mulch
+- Leaf cleanup
+- Hedge trimming
+- Pressure washing
+- Landscaping
+- Seasonal cleanup
+
+Step 5:
+Pricing engine:
+Create fake pricing logic:
+- Basic mowing starts at $45
+- Add price based on lawn square footage
+- Add surcharge for large lots
+- Add surcharge for heavy tree coverage
+- Add add-on prices for each selected service
+Show final estimated price range.
+
+Step 6:
+Customer enters:
+- Name
+- Phone
+- Email
+- Preferred service date
+- Notes
+
+Step 7:
+Customer can:
+- Book appointment
+- Pay deposit
+- Request manual review
+- Receive SMS confirmation
+
+Admin Dashboard:
+Create a clean admin dashboard with fake data:
+- New leads
+- Instant quote requests
+- Booked jobs
+- Paid deposits
+- Pending manual reviews
+- Properties with low AI confidence
+- Revenue this week
+- Upcoming jobs
+- Customer follow-ups
+- Owner briefing summary
+
+Owner Briefing Page:
+Create an AI-generated owner briefing section:
+- New leads today
+- Highest-value quote
+- Jobs needing manual review
+- Customers who did not finish checkout
+- Recommended follow-up messages
+- Revenue opportunity today
+- Route planning notes
+
+Automation section:
+Show backend-ready placeholders for:
+- Deep Lawn API or custom measurement API
+- Google Maps API
+- Mapbox API
+- Nearmap / aerial imagery API
+- Property parcel API
+- Stripe payment API
+- Twilio SMS API
+- GoHighLevel SMS/webhook
+- Google Calendar booking
+- OpenAI assistant
+- Email confirmation API
+
+Important technical notes:
+Add code comments showing where these API keys go:
+- VITE_GOOGLE_MAPS_API_KEY
+- VITE_MAPBOX_TOKEN
+- VITE_DEEPLAWN_API_KEY
+- VITE_STRIPE_PUBLIC_KEY
+- STRIPE_SECRET_KEY
+- TWILIO_ACCOUNT_SID
+- TWILIO_AUTH_TOKEN
+- TWILIO_PHONE_NUMBER
+- GHL_API_KEY
+- OPENAI_API_KEY
+- GOOGLE_CALENDAR_CLIENT_ID
+- PROPERTY_DATA_API_KEY
+- NEARMAP_API_KEY
+
+For now, use realistic mock data and fake API responses so the app works as a demo without real keys.
+
+Build requirements:
+- React
+- Tailwind CSS
+- Clean reusable components
+- Fully responsive mobile design
+- Smooth animations
+- All buttons clickable
+- Fake satellite image card with green property overlays
+- Professional pricing cards
+- Working quote calculator with mock measurements
+- Admin dashboard with fake lead/job data
+- Clear comments for future backend integration
+- Investor/demo-ready UI
+
+Make this look like a serious AI-powered lawn care operating system, not just a normal landscaping website.

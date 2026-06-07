@@ -1,0 +1,106 @@
+Build a full-stack web app called “Blue Collar AI Network” — an Uber-style marketplace for local service jobs (landscaping, pressure washing, electrical).
+
+CORE CONCEPT:
+Customers request a job → system finds nearby contractors → contractors accept → job is completed → payment processed.
+
+STACK:
+- Next.js + TypeScript
+- Tailwind CSS
+- Supabase (database + auth)
+- Stripe (payments)
+- Twilio (SMS)
+- Google Maps API (location + routing)
+
+FEATURES:
+
+1. CUSTOMER APP:
+- Request a job:
+  - service type
+  - description
+  - address (map integration)
+  - preferred time
+- Show live status:
+  - searching for contractor
+  - contractor assigned
+  - ETA map tracking
+- Payment system (card on file)
+- Job history
+- Ratings/reviews
+
+---
+
+2. CONTRACTOR APP:
+- Toggle “ONLINE / OFFLINE”
+- Receive job requests in real-time
+- Accept / decline within 30 seconds
+- Show job details:
+  - location
+  - payout
+  - job description
+- Navigation (Google Maps)
+- Status buttons:
+  - accepted
+  - en route
+  - arrived
+  - completed
+- Earnings dashboard
+
+---
+
+3. MATCHING ENGINE:
+- When job is created:
+  - find contractors within X miles
+  - send push/SMS notification
+  - first to accept gets job
+- If no one accepts:
+  - expand radius
+  - increase payout (optional surge pricing)
+
+---
+
+4. ADMIN DASHBOARD:
+- View all jobs
+- Override assignments
+- Monitor contractors
+- View earnings + fees
+- Dispute resolution panel
+
+---
+
+5. PAYMENT SYSTEM:
+- Customer pays platform via Stripe
+- Platform takes % (e.g., 20%)
+- Contractor receives payout (Stripe Connect)
+
+---
+
+6. TRUST SYSTEM:
+- Contractor onboarding:
+  - upload license
+  - upload insurance
+- Ratings after each job
+- Contractor score:
+  - completion rate
+  - response time
+  - rating average
+
+---
+
+7. NOTIFICATIONS:
+- SMS via Twilio:
+  - new job alerts
+  - status updates
+- Email confirmations
+
+---
+
+8. UI:
+- Mobile-first design
+- Uber-style simplicity
+- Dark and light mode
+
+---
+
+9. BONUS:
+- AI pricing suggestion based on job type + location
+- Auto-dispatch (assign best contractor instead of first accept)

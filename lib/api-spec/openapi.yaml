@@ -1,0 +1,1269 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: jobs
+  - name: subcontractors
+  - name: assignments
+  - name: dashboard
+  - name: escalations
+  - name: kpi
+  - name: audit
+  - name: notifications
+  - name: dispatch
+  - name: client
+  - name: worker
+  - name: invoices
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /jobs:
+    get:
+      operationId: listJobs
+      tags: [jobs]
+      summary: List all jobs
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+    post:
+      operationId: createJob
+      tags: [jobs]
+      summary: Create a new job from a lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobBody"
+      responses:
+        "201":
+          description: Created job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /jobs/recent:
+    get:
+      operationId: getRecentJobs
+      tags: [jobs]
+      summary: Get the 10 most recent jobs
+      responses:
+        "200":
+          description: Recent jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+
+  /jobs/stale:
+    get:
+      operationId: getStaleJobs
+      tags: [jobs]
+      summary: Get new leads that have not been contacted in 48+ hours
+      responses:
+        "200":
+          description: Stale leads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+
+  /jobs/{id}:
+    get:
+      operationId: getJob
+      tags: [jobs]
+      summary: Get a job by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Job found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateJob
+      tags: [jobs]
+      summary: Update a job
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateJobBody"
+      responses:
+        "200":
+          description: Updated job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteJob
+      tags: [jobs]
+      summary: Delete a job
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /jobs/{id}/assign:
+    post:
+      operationId: assignJob
+      tags: [assignments]
+      summary: Assign a job to a subcontractor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignJobBody"
+      responses:
+        "201":
+          description: Assignment created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+        "404":
+          description: Job or sub not found
+
+  /assignments/{id}:
+    patch:
+      operationId: updateAssignment
+      tags: [assignments]
+      summary: Update assignment status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAssignmentBody"
+      responses:
+        "200":
+          description: Updated assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+        "404":
+          description: Not found
+
+  /subcontractors:
+    get:
+      operationId: listSubcontractors
+      tags: [subcontractors]
+      summary: List all subcontractors
+      responses:
+        "200":
+          description: List of subcontractors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subcontractor"
+    post:
+      operationId: createSubcontractor
+      tags: [subcontractors]
+      summary: Add a subcontractor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSubcontractorBody"
+      responses:
+        "201":
+          description: Created subcontractor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcontractor"
+
+  /subcontractors/{id}:
+    get:
+      operationId: getSubcontractor
+      tags: [subcontractors]
+      summary: Get a subcontractor by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Subcontractor
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcontractor"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateSubcontractor
+      tags: [subcontractors]
+      summary: Update a subcontractor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSubcontractorBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subcontractor"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSubcontractor
+      tags: [subcontractors]
+      summary: Remove a subcontractor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /subcontractors/{id}/workload:
+    get:
+      operationId: getSubcontractorWorkload
+      tags: [subcontractors]
+      summary: Get current active assignment count for a subcontractor
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Workload info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubcontractorWorkload"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get high-level earnings and job status summary
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dispatch/suggestions/{jobId}:
+    get:
+      operationId: getDispatchSuggestions
+      tags: [dispatch]
+      summary: Get ranked subcontractor suggestions for a job
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Ranked suggestions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DispatchSuggestion"
+
+  /client/lookup:
+    post:
+      operationId: clientLookupJob
+      tags: [client]
+      summary: Look up a job by phone number and job ID for the client portal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientLookupBody"
+      responses:
+        "200":
+          description: Job found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "404":
+          description: Not found
+
+  /client/request:
+    post:
+      operationId: clientRequestService
+      tags: [client]
+      summary: Submit a new service request from the client portal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateJobBody"
+      responses:
+        "201":
+          description: Request received
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+
+  /worker/jobs/{subId}:
+    get:
+      operationId: getWorkerJobs
+      tags: [worker]
+      summary: Get all jobs assigned to a specific subcontractor
+      parameters:
+        - in: path
+          name: subId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Assigned jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Job"
+
+  /worker/assignments/{id}/status:
+    patch:
+      operationId: workerUpdateAssignmentStatus
+      tags: [worker]
+      summary: Worker updates their assignment status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAssignmentBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assignment"
+        "404":
+          description: Not found
+
+  /escalations:
+    get:
+      operationId: listEscalations
+      tags: [escalations]
+      summary: List all escalations
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of escalations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Escalation"
+    post:
+      operationId: createEscalation
+      tags: [escalations]
+      summary: Create an escalation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEscalationBody"
+      responses:
+        "201":
+          description: Created escalation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Escalation"
+
+  /escalations/{id}:
+    patch:
+      operationId: updateEscalation
+      tags: [escalations]
+      summary: Update escalation status or notes
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEscalationBody"
+      responses:
+        "200":
+          description: Updated escalation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Escalation"
+        "404":
+          description: Not found
+
+  /kpi/summary:
+    get:
+      operationId: getKpiSummary
+      tags: [kpi]
+      summary: Get KPI counts for today and overall
+      responses:
+        "200":
+          description: KPI summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KpiSummary"
+
+  /kpi/log:
+    post:
+      operationId: logKpiEntry
+      tags: [kpi]
+      summary: Log a dispatcher KPI action
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogKpiBody"
+      responses:
+        "201":
+          description: Logged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KpiEntry"
+
+  /audit-logs:
+    get:
+      operationId: listAuditLogs
+      tags: [audit]
+      summary: List audit trail entries
+      parameters:
+        - in: query
+          name: entityType
+          schema:
+            type: string
+        - in: query
+          name: entityId
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit log entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLog"
+
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags: [notifications]
+      summary: List all notifications
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark a notification as read
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated notification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
+  /notifications/read-all:
+    patch:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated:
+                    type: integer
+                required:
+                  - updated
+
+  /invoices/job/{jobId}:
+    get:
+      operationId: getInvoiceByJob
+      tags: [invoices]
+      summary: Get invoice for a job
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+
+  /invoices/{id}:
+    get:
+      operationId: getInvoice
+      tags: [invoices]
+      summary: Get invoice by ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "404":
+          description: Not found
+
+  /invoices/{id}/status:
+    patch:
+      operationId: updateInvoiceStatus
+      tags: [invoices]
+      summary: Update invoice status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInvoiceStatusBody"
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices:
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create an invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceBody"
+      responses:
+        "201":
+          description: Created invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+components:
+  schemas:
+    ClientLookupBody:
+      type: object
+      properties:
+        phone:
+          type: string
+        jobId:
+          type: integer
+      required:
+        - phone
+        - jobId
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: integer
+        customerName:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        serviceType:
+          type: string
+        planName:
+          type: ["string", "null"]
+        customerPrice:
+          type: ["number", "null"]
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        assignment:
+          $ref: "#/components/schemas/Assignment"
+          nullable: true
+      required:
+        - id
+        - customerName
+        - phone
+        - address
+        - serviceType
+        - status
+        - createdAt
+
+    CreateJobBody:
+      type: object
+      properties:
+        customerName:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        serviceType:
+          type: string
+        planName:
+          type: ["string", "null"]
+        customerPrice:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - customerName
+        - phone
+        - address
+        - serviceType
+
+    UpdateJobBody:
+      type: object
+      properties:
+        customerName:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        serviceType:
+          type: string
+        planName:
+          type: ["string", "null"]
+        customerPrice:
+          type: ["number", "null"]
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+
+    Subcontractor:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        specialty:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - phone
+        - specialty
+        - createdAt
+
+    SubcontractorWorkload:
+      type: object
+      properties:
+        subcontractorId:
+          type: integer
+        activeJobs:
+          type: integer
+        jobsToday:
+          type: integer
+        isOverbooked:
+          type: boolean
+      required:
+        - subcontractorId
+        - activeJobs
+        - jobsToday
+        - isOverbooked
+
+    CreateSubcontractorBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        specialty:
+          type: string
+        notes:
+          type: ["string", "null"]
+      required:
+        - name
+        - phone
+        - specialty
+
+    UpdateSubcontractorBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        specialty:
+          type: string
+        notes:
+          type: ["string", "null"]
+
+    Assignment:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: integer
+        subcontractorId:
+          type: integer
+        subName:
+          type: ["string", "null"]
+        subPay:
+          type: number
+        ownerProfit:
+          type: number
+        status:
+          type: string
+        assignedAt:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+      required:
+        - id
+        - jobId
+        - subcontractorId
+        - subPay
+        - ownerProfit
+        - status
+        - assignedAt
+
+    AssignJobBody:
+      type: object
+      properties:
+        subcontractorId:
+          type: integer
+        subPay:
+          type: number
+        customerPrice:
+          type: ["number", "null"]
+      required:
+        - subcontractorId
+        - subPay
+
+    UpdateAssignmentBody:
+      type: object
+      properties:
+        status:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+
+    DispatchSuggestion:
+      type: object
+      properties:
+        subcontractorId:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+        specialty:
+          type: string
+        activeJobs:
+          type: integer
+        jobsToday:
+          type: integer
+        isOverbooked:
+          type: boolean
+        specialtyMatch:
+          type: boolean
+        score:
+          type: integer
+        reason:
+          type: string
+      required:
+        - subcontractorId
+        - name
+        - phone
+        - specialty
+        - activeJobs
+        - jobsToday
+        - isOverbooked
+        - specialtyMatch
+        - score
+        - reason
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalRevenue:
+          type: number
+        totalSubPay:
+          type: number
+        totalOwnerProfit:
+          type: number
+        newJobs:
+          type: integer
+        assignedJobs:
+          type: integer
+        completedJobs:
+          type: integer
+        totalJobs:
+          type: integer
+        totalSubs:
+          type: integer
+        staleLeads:
+          type: integer
+        pendingEscalations:
+          type: integer
+        unreadNotifications:
+          type: integer
+      required:
+        - totalRevenue
+        - totalSubPay
+        - totalOwnerProfit
+        - newJobs
+        - assignedJobs
+        - completedJobs
+        - totalJobs
+        - totalSubs
+        - staleLeads
+        - pendingEscalations
+        - unreadNotifications
+
+    Escalation:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: ["integer", "null"]
+        category:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        resolution:
+          type: ["string", "null"]
+        customerName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - category
+        - description
+        - status
+        - createdAt
+        - updatedAt
+
+    CreateEscalationBody:
+      type: object
+      properties:
+        jobId:
+          type: ["integer", "null"]
+        category:
+          type: string
+        description:
+          type: string
+      required:
+        - category
+        - description
+
+    UpdateEscalationBody:
+      type: object
+      properties:
+        status:
+          type: string
+        resolution:
+          type: ["string", "null"]
+
+    KpiEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        metricType:
+          type: string
+        jobId:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - metricType
+        - createdAt
+
+    LogKpiBody:
+      type: object
+      properties:
+        metricType:
+          type: string
+        jobId:
+          type: ["integer", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - metricType
+
+    KpiSummary:
+      type: object
+      properties:
+        today:
+          $ref: "#/components/schemas/KpiCounts"
+        allTime:
+          $ref: "#/components/schemas/KpiCounts"
+      required:
+        - today
+        - allTime
+
+    KpiCounts:
+      type: object
+      properties:
+        callsCompleted:
+          type: integer
+        leadsContacted:
+          type: integer
+        quotesSent:
+          type: integer
+        jobsBooked:
+          type: integer
+        invoicesFollowedUp:
+          type: integer
+        reviewsRequested:
+          type: integer
+      required:
+        - callsCompleted
+        - leadsContacted
+        - quotesSent
+        - jobsBooked
+        - invoicesFollowedUp
+        - reviewsRequested
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        actionType:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: ["integer", "null"]
+        description:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - actionType
+        - entityType
+        - description
+        - createdAt
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        entityType:
+          type: ["string", "null"]
+        entityId:
+          type: ["integer", "null"]
+        read:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - type
+        - title
+        - body
+        - read
+        - createdAt
+
+    InvoiceLineItem:
+      type: object
+      properties:
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        amount:
+          type: number
+      required:
+        - description
+        - quantity
+        - unitPrice
+        - amount
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        jobId:
+          type: integer
+        invoiceNumber:
+          type: string
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        serviceType:
+          type: string
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        status:
+          type: string
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        sentAt:
+          type: ["string", "null"]
+        paidAt:
+          type: ["string", "null"]
+      required:
+        - id
+        - jobId
+        - invoiceNumber
+        - customerName
+        - customerPhone
+        - serviceType
+        - lineItems
+        - subtotal
+        - tax
+        - total
+        - status
+        - createdAt
+
+    CreateInvoiceBody:
+      type: object
+      properties:
+        jobId:
+          type: integer
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        serviceType:
+          type: string
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        notes:
+          type: ["string", "null"]
+      required:
+        - jobId
+        - customerName
+        - customerPhone
+        - serviceType
+        - lineItems
+        - subtotal
+        - total
+
+    UpdateInvoiceStatusBody:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status

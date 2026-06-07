@@ -1,0 +1,208 @@
+Build a production-ready Main Admin Dispatcher Dashboard for Green’s Landscape and Pressure Washing.
+
+Goal:
+This is the master control center for the business owner, head dispatcher, or operations manager. It should control the full business: leads, quotes, jobs, crews, invoices, communications, automation, reporting, user management, and escalations from sub dispatchers.
+
+Tech stack:
+- Next.js
+- React
+- Tailwind CSS
+- TypeScript
+- PostgreSQL
+- Prisma ORM
+- Role-based auth
+- Replit-ready deployment
+
+Create these roles:
+- ADMIN
+- OWNER
+- SUB_DISPATCHER
+- CREW_MEMBER
+- OFFICE_STAFF
+
+Main Admin permissions:
+Allowed:
+- full access to all operational pages
+- create, edit, delete records
+- manage users and permissions
+- manage Stripe and Twilio settings
+- manage integrations
+- manage pricing rules
+- manage service areas
+- manage automation rules
+- view full financial reports
+- approve escalations
+- override schedules
+- export reports
+- manage templates and campaigns
+- create and archive crews
+- view audit logs
+
+Build these pages for the Main Admin Dashboard:
+
+1. Executive Overview Dashboard
+Show:
+- total leads this week
+- total quotes sent
+- quote acceptance rate
+- jobs scheduled today
+- jobs completed this week
+- unpaid invoices
+- revenue this week
+- revenue this month
+- average job value
+- missed calls
+- response time
+- reviews gained this month
+- reactivation campaign performance
+
+Add visual sections for:
+- revenue trend
+- lead source breakdown
+- service type breakdown
+- pipeline value
+- crew utilization
+- overdue invoice alerts
+
+2. Lead Command Center
+Features:
+- full searchable table
+- filter by date, status, service type, area, source, assigned user
+- bulk actions:
+  - assign leads
+  - tag leads
+  - send follow-up
+  - archive lost leads
+  - export CSV
+- lead profile drawer with:
+  - contact info
+  - notes
+  - communication timeline
+  - quote history
+  - assigned user
+  - automation history
+
+3. Quote Management Center
+Features:
+- all quotes table
+- filter by status and date
+- pricing template builder
+- quote item builder
+- create/edit/send/duplicate quote
+- approve custom pricing
+- convert accepted quotes into jobs
+- expired quote reactivation button
+
+4. Job Dispatch Board
+Features:
+- daily calendar
+- weekly calendar
+- list view
+- drag-and-drop scheduling
+- assign/reassign crews
+- map or area grouping placeholder
+- job status tracking:
+  - scheduled
+  - en_route
+  - in_progress
+  - completed
+  - canceled
+- route grouping by area
+- weather delay flag
+- on-the-way text action
+- completion verification
+
+5. Crew Management Center
+Features:
+- crew profiles
+- crew availability
+- service specialties
+- active jobs
+- completed jobs
+- performance metrics
+- ability to create/edit/archive crews
+- notes on crew issues
+- assign jobs directly from this page
+
+6. Communications Command Center
+Features:
+- full call log
+- SMS inbox
+- conversation threads
+- missed call queue
+- outbound campaign calls
+- quick templates
+- internal note logging
+- escalation button
+- customer sentiment flag
+- communication outcome tracking
+
+7. Invoice & Payment Control Center
+Features:
+- all invoices table
+- paid/unpaid/overdue filters
+- send invoice button
+- resend payment reminder
+- mark manual payment
+- refund request flag
+- dispute flag
+- Stripe reference fields
+- aging summary
+- total receivables
+- partial payment support
+
+8. Automation & Workflow Center
+Features:
+- show all running automation rules
+- show automation event logs
+- retry failed automations
+- toggle workflows on/off
+- categories:
+  - missed call text back
+  - quote follow-up
+  - appointment reminders
+  - overdue invoice reminders
+  - review requests
+  - reactivation campaigns
+- webhook event history
+- last successful run
+- failure reason
+- retry button
+
+9. Escalation Center
+Features:
+- list of escalation requests from sub dispatchers
+- categories:
+  - upset customer
+  - refund issue
+  - custom pricing needed
+  - commercial bid needed
+  - service complaint
+  - crew issue
+- status:
+  - open
+  - in review
+  - resolved
+  - closed
+- admin notes
+- assign escalation to admin user
+- link to related record
+
+10. User & Permissions Management
+Features:
+- create users
+- edit users
+- activate/deactivate users
+- assign roles
+- permission matrix
+- log all permission changes
+- reset passwords
+- filter by role
+
+11. Settings & Integrations
+Features:
+- business profile
+- branding
+- service areas
+- pricing rules
+- Twilio settings
