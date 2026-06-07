@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
-import { and, eq } from "drizzle-orm";
+import { and, eq, desc, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { db, organizationsTable, customersTable, quotesTable, jobsTable } from "@workspace/db";
+import { db, organizationsTable, customersTable, quotesTable, jobsTable, workersTable, invoicesTable } from "@workspace/db";
 import { getAgentQueue } from "../queues";
 import { logger } from "../lib/logger";
 
@@ -151,6 +151,96 @@ router.post("/public/quotes/:id/accept", async (req, res): Promise<void> => {
     res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, "POST /public/quotes/accept failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Worker portal (phone link; no login — identified by the worker's token) ──
+router.get("/public/worker/:token", async (req, res): Promise<void> => {
+  try {
+    const token = String(req.params.token);
+    const [worker] = await db.select().from(workersTable).where(eq(workersTable.accessToken, token));
+    if (!worker) {
+      res.status(404).json({ error: "Invalid link" });
+      return;
+    }
+    const [org] = await db
+      .select({ name: organizationsTable.name })
+      .from(organizationsTable)
+      .where(eq(organizationsTable.id, worker.orgId));
+    const jobs = await db
+      .select({
+        id: jobsTable.id,
+        serviceType: jobsTable.serviceType,
+        status: jobsTable.status,
+        priceCents: jobsTable.priceCents,
+        scheduledDate: jobsTable.scheduledDate,
+        notes: jobsTable.notes,
+        customerName: customersTable.name,
+        address: customersTable.address,
+      })
+      .from(jobsTable)
+      .leftJoin(customersTable, eq(jobsTable.customerId, customersTable.id))
+      .where(and(eq(jobsTable.orgId, worker.orgId), inArray(jobsTable.status, ["new", "assigned", "in_progress"])))
+      .orderBy(desc(jobsTable.createdAt));
+    res.json({
+      worker: { name: worker.name },
+      orgName: org?.name ?? "Southern Roots Turf",
+      jobs: jobs.map((j) => ({ ...j, scheduledDate: j.scheduledDate?.toISOString() ?? null })),
+    });
+  } catch (err) {
+    logger.error({ err }, "GET /public/worker failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+const WorkerStatusBody = z.object({ status: z.enum(["assigned", "in_progress", "complete"]) });
+
+router.post("/public/worker/:token/jobs/:jobId", async (req, res): Promise<void> => {
+  const parsed = WorkerStatusBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  try {
+    const token = String(req.params.token);
+    const jobId = Number(req.params.jobId);
+    const [worker] = await db.select().from(workersTable).where(eq(workersTable.accessToken, token));
+    if (!worker) {
+      res.status(404).json({ error: "Invalid link" });
+      return;
+    }
+    const updateData: Partial<typeof jobsTable.$inferInsert> = { status: parsed.data.status };
+    if (parsed.data.status === "complete") updateData.completedAt = new Date();
+    const [updated] = await db
+      .update(jobsTable)
+      .set(updateData)
+      .where(and(eq(jobsTable.orgId, worker.orgId), eq(jobsTable.id, jobId)))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Job not found" });
+      return;
+    }
+    // Completing a job auto-invoices (same as the owner flow).
+    if (parsed.data.status === "complete") {
+      const [existing] = await db
+        .select({ id: invoicesTable.id })
+        .from(invoicesTable)
+        .where(and(eq(invoicesTable.orgId, worker.orgId), eq(invoicesTable.jobId, updated.id)));
+      if (!existing) {
+        await db.insert(invoicesTable).values({
+          orgId: worker.orgId,
+          customerId: updated.customerId,
+          jobId: updated.id,
+          amountCents: updated.priceCents,
+          status: "sent",
+          dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        });
+      }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "POST /public/worker job status failed");
     res.status(500).json({ error: "Internal server error" });
   }
 });

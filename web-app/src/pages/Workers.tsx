@@ -16,6 +16,7 @@ interface Worker {
   activeJobCount: number;
   todayJobCount: number;
   status: string;
+  accessToken?: string | null;
 }
 
 const SPECIALTIES = ["general", "landscaping", "pressure_washing", "aeration"] as const;
@@ -118,10 +119,16 @@ function NewWorkerModal({ onClose }: { onClose: () => void }) {
 
 export default function Workers() {
   const [showNew, setShowNew] = useState(false);
+  const toast = useToast();
   const { data: workers, isLoading } = useQuery<Worker[]>({
     queryKey: ["workers"],
     queryFn: () => api.get("/workers"),
   });
+
+  function copyLink(token: string) {
+    navigator.clipboard?.writeText(`${window.location.origin}/w/${token}`);
+    toast("Crew portal link copied — share it with your worker");
+  }
 
   const activeCount = workers?.filter((w) => w.status === "active").length ?? 0;
 
@@ -181,7 +188,20 @@ export default function Workers() {
                     <span className="text-gray-300 text-xs">—</span>
                   )}
                 </td>
-                <td className="px-6 py-4"><StatusBadge status={w.status} /></td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={w.status} />
+                    {w.accessToken && (
+                      <button
+                        onClick={() => copyLink(w.accessToken!)}
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                        title="Copy the worker's phone portal link"
+                      >
+                        📱 Crew link
+                      </button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             {!isLoading && !workers?.length && (

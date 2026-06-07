@@ -7,6 +7,7 @@ import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import QuotePage from "./pages/QuotePage";
 import LeadForm from "./pages/LeadForm";
+import WorkerPortal from "./pages/WorkerPortal";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Jobs from "./pages/Jobs";
@@ -27,6 +28,7 @@ export default function App() {
   if (path === "/verify-email") return <VerifyEmail />;
   if (path.startsWith("/quote/")) return <QuotePage />;  // customer accepts a quote
   if (path.startsWith("/q/")) return <LeadForm />;        // customer requests a quote
+  if (path.startsWith("/w/")) return <WorkerPortal />;    // crew phone portal
 
   if (loading) {
     return (

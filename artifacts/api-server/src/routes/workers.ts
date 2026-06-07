@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 import { db, workersTable, jobsTable, assignmentsTable } from "@workspace/db";
 import { getOrgId, type AuthedRequest } from "../middlewares/auth";
@@ -44,6 +45,7 @@ function formatWorker(row: typeof workersTable.$inferSelect) {
     todayJobCount: 0,
     status: row.isActive ? "active" : "inactive",
     homeAddress: row.homeAddress,
+    accessToken: row.accessToken,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -84,6 +86,7 @@ router.post("/workers", async (req, res): Promise<void> => {
         email: parsed.data.email ?? null,
         specialty: parsed.data.specialty ?? "general",
         homeAddress: parsed.data.homeAddress ?? null,
+        accessToken: randomBytes(16).toString("hex"),
       })
       .returning();
     res.status(201).json(formatWorker(worker));

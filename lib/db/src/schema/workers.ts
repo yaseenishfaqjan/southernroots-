@@ -14,6 +14,7 @@ export const workersTable = pgTable("workers", {
   currentJobCount: integer("current_job_count").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   homeAddress: text("home_address"),
+  accessToken: text("access_token"), // shareable link for the worker phone portal
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
