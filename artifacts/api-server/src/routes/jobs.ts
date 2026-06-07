@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { and, eq, desc, isNotNull, lte, sql } from "drizzle-orm";
-import { db, jobsTable, assignmentsTable, subcontractorsTable, customersTable } from "@workspace/db";
+import { db, jobsTable, assignmentsTable, subcontractorsTable, customersTable, invoicesTable } from "@workspace/db";
 import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import {
   ListJobsQueryParams,
@@ -174,6 +174,25 @@ router.patch("/jobs/:id", async (req, res): Promise<void> => {
   if (!updated) {
     res.status(404).json({ error: "Job not found" });
     return;
+  }
+
+  // When a job is completed, auto-generate an invoice once (powers the
+  // Revenue / Outstanding Invoices KPIs and the billing flow).
+  if (parsed.data.status === "complete") {
+    const [existingInvoice] = await db
+      .select({ id: invoicesTable.id })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.jobId, updated.id)));
+    if (!existingInvoice) {
+      await db.insert(invoicesTable).values({
+        orgId,
+        customerId: updated.customerId,
+        jobId: updated.id,
+        amountCents: updated.priceCents,
+        status: "sent",
+        dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      });
+    }
   }
 
   const job = await getJob(params.data.id, orgId);

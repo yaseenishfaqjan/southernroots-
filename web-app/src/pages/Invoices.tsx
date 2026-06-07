@@ -40,6 +40,16 @@ export default function Invoices() {
     onError: () => toast("Could not send the reminder", "error"),
   });
 
+  const markPaid = useMutation({
+    mutationFn: (id: number) => api.patch(`/invoices/${id}/status`, { status: "paid" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-summary"] });
+      toast("Invoice marked paid");
+    },
+    onError: () => toast("Could not mark the invoice paid", "error"),
+  });
+
   const totalAmount =
     invoices?.reduce((sum, inv) => sum + inv.amountCents, 0) ?? 0;
   const overdueCount =
@@ -126,20 +136,28 @@ export default function Invoices() {
                   {formatDate(inv.dueDate)}
                 </td>
                 <td className="px-6 py-4">
-                  {(inv.status === "sent" || inv.status === "overdue") && (
-                    <button
-                      onClick={() => resend.mutate(inv.id)}
-                      disabled={resend.isPending}
-                      className="flex items-center gap-1.5 text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50"
-                    >
-                      <Send className="w-3 h-3" />
-                      Resend
-                    </button>
+                  {(inv.status === "sent" || inv.status === "overdue" || inv.status === "draft") && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => markPaid.mutate(inv.id)}
+                        disabled={markPaid.isPending}
+                        className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 transition-colors disabled:opacity-50"
+                      >
+                        Mark Paid
+                      </button>
+                      {(inv.status === "sent" || inv.status === "overdue") && (
+                        <button
+                          onClick={() => resend.mutate(inv.id)}
+                          disabled={resend.isPending}
+                          className="flex items-center gap-1.5 text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50"
+                        >
+                          <Send className="w-3 h-3" /> Resend
+                        </button>
+                      )}
+                    </div>
                   )}
                   {inv.status === "paid" && (
-                    <span className="text-xs text-gray-400">
-                      Paid {formatDate(inv.paidAt)}
-                    </span>
+                    <span className="text-xs text-gray-400">Paid {formatDate(inv.paidAt)}</span>
                   )}
                 </td>
               </tr>

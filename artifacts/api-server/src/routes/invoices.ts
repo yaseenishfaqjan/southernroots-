@@ -190,42 +190,45 @@ router.post("/invoices", async (req, res): Promise<void> => {
   res.status(201).json(formatInvoice(invoice!));
 });
 
+const UpdateStatusBody = z.object({ status: z.enum(["draft", "sent", "paid", "overdue", "cancelled"]) });
+
 router.patch("/invoices/:id/status", async (req, res): Promise<void> => {
   const params = InvoiceIdParam.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-
-  const parsed = UpdateInvoiceStatusBody.safeParse(req.body);
+  const parsed = UpdateStatusBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  try {
+    const orgId = getOrgId(req as AuthedRequest);
+    const updateData: Partial<typeof invoicesTable.$inferInsert> = { status: parsed.data.status };
+    if (parsed.data.status === "paid") updateData.paidAt = new Date();
 
-  const orgId = getOrgId(req as AuthedRequest);
-  const updateData: Record<string, unknown> = { status: parsed.data.status };
-  if (parsed.data.status === "sent") {
-    updateData.sentAt = new Date();
-  } else if (parsed.data.status === "paid") {
-    updateData.paidAt = new Date();
-    const [inv] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.id, params.data.id)));
-    if (inv) {
-      await db.update(jobsTable).set({ status: "paid" }).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, inv.jobId)));
+    const [updated] = await db
+      .update(invoicesTable)
+      .set(updateData)
+      .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.id, params.data.id)))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
     }
+    // Mark the linked job paid too.
+    if (parsed.data.status === "paid" && updated.jobId) {
+      await db
+        .update(jobsTable)
+        .set({ status: "paid" })
+        .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, updated.jobId)));
+    }
+    res.json(formatInvoiceRow(updated, null));
+  } catch (err) {
+    logger.error({ err }, "PATCH /invoices/:id/status failed");
+    res.status(500).json({ error: "Internal server error" });
   }
-
-  const [updated] = await db
-    .update(invoicesTable)
-    .set(updateData as Parameters<typeof db.update>[0] extends infer T ? T : never)
-    .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.id, params.data.id)))
-    .returning();
-
-  if (!updated) {
-    res.status(404).json({ error: "Invoice not found" });
-    return;
-  }
-  res.json(formatInvoice(updated));
 });
 
 export default router;
