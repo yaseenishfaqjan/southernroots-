@@ -1,10 +1,96 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, X, Loader2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, X, Loader2, Calendar, DollarSign, FileText, User } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import { TableSkeleton } from "../components/Skeleton";
 import { api, formatMoney, formatDate } from "../lib/api";
 import { useToast } from "../lib/toast";
+
+const NEXT_STATUS: Record<string, { label: string; to: string }[]> = {
+  new: [{ label: "Assign", to: "assigned" }],
+  assigned: [{ label: "Start", to: "in_progress" }],
+  in_progress: [{ label: "Mark Complete", to: "complete" }],
+};
+
+function JobDrawer({ id, onClose }: { id: number; onClose: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const { data: job, isLoading } = useQuery<Job>({
+    queryKey: ["job", id],
+    queryFn: () => api.get(`/jobs/${id}`),
+  });
+
+  const patch = useMutation({
+    mutationFn: (status: string) => api.patch(`/jobs/${id}`, { status }),
+    onSuccess: (_d, status) => {
+      qc.invalidateQueries({ queryKey: ["jobs"] });
+      qc.invalidateQueries({ queryKey: ["job", id] });
+      toast(`Job marked ${status.replace(/_/g, " ")}`);
+    },
+    onError: () => toast("Could not update the job", "error"),
+  });
+
+  const actions = job ? NEXT_STATUS[job.status] ?? [] : [];
+
+  return (
+    <>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 z-40 bg-black/30" />
+      <motion.div
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "tween", duration: 0.25 }}
+        className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto bg-white shadow-2xl"
+      >
+        <div className="flex items-center justify-between border-b border-gray-200 p-5">
+          <h2 className="text-lg font-semibold text-gray-900">Job #{id}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X className="h-5 w-5" /></button>
+        </div>
+        {isLoading || !job ? (
+          <div className="flex h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-green-600" /></div>
+        ) : (
+          <div className="space-y-6 p-5">
+            <div className="flex items-center justify-between">
+              <div className="text-xl font-semibold text-gray-900">{job.serviceType.replace(/_/g, " ")}</div>
+              <StatusBadge status={job.status} />
+            </div>
+            <div className="space-y-3 text-sm text-gray-700">
+              <div className="flex items-center gap-2"><DollarSign className="h-4 w-4 text-gray-400" /> {formatMoney(job.priceCents)}</div>
+              <div className="flex items-center gap-2"><Calendar className="h-4 w-4 text-gray-400" /> {job.scheduledDate ? `Scheduled ${formatDate(job.scheduledDate)}` : "Not scheduled"}</div>
+              <div className="flex items-center gap-2"><User className="h-4 w-4 text-gray-400" /> Customer #{job.customerId}</div>
+              {job.notes && <div className="flex items-start gap-2"><FileText className="mt-0.5 h-4 w-4 text-gray-400" /> {job.notes}</div>}
+              <div className="text-xs text-gray-400">Created {formatDate(job.createdAt)}</div>
+            </div>
+            {actions.length > 0 && (
+              <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-4">
+                {actions.map((a) => (
+                  <button
+                    key={a.to}
+                    onClick={() => patch.mutate(a.to)}
+                    disabled={patch.isPending}
+                    className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+                  >
+                    {patch.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {a.label}
+                  </button>
+                ))}
+                {job.status !== "cancelled" && job.status !== "complete" && job.status !== "paid" && (
+                  <button
+                    onClick={() => patch.mutate("cancelled")}
+                    disabled={patch.isPending}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    Cancel job
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </motion.div>
+    </>
+  );
+}
 
 const STATUS_TABS = [
   "all",
@@ -161,6 +247,7 @@ function NewJobModal({ onClose }: { onClose: () => void }) {
 export default function Jobs() {
   const [status, setStatus] = useState<string>("all");
   const [showNew, setShowNew] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const qc = useQueryClient();
 
   const { data: jobs, isLoading } = useQuery<Job[]>({
@@ -188,6 +275,9 @@ export default function Jobs() {
       </div>
 
       {showNew && <NewJobModal onClose={() => setShowNew(false)} />}
+      <AnimatePresence>
+        {selectedId && <JobDrawer id={selectedId} onClose={() => setSelectedId(null)} />}
+      </AnimatePresence>
 
       {/* Status filter tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit flex-wrap">
@@ -225,7 +315,7 @@ export default function Jobs() {
           <tbody className="divide-y divide-gray-100">
             {isLoading && <TableSkeleton rows={5} cols={6} />}
             {jobs?.map((job) => (
-              <tr key={job.id} className="hover:bg-gray-50">
+              <tr key={job.id} onClick={() => setSelectedId(job.id)} className="cursor-pointer hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm text-gray-500">#{job.id}</td>
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">
                   {job.serviceType.replace(/_/g, " ")}
@@ -243,7 +333,7 @@ export default function Jobs() {
                   <div className="flex gap-2">
                     {job.status === "in_progress" && (
                       <button
-                        onClick={() => patchJob.mutate({ id: job.id, data: { status: "complete" } })}
+                        onClick={(e) => { e.stopPropagation(); patchJob.mutate({ id: job.id, data: { status: "complete" } }); }}
                         disabled={patchJob.isPending}
                         className="text-xs bg-green-100 text-green-700 px-3 py-1 rounded-full hover:bg-green-200 transition-colors disabled:opacity-50"
                       >
@@ -252,7 +342,7 @@ export default function Jobs() {
                     )}
                     {job.status === "new" && (
                       <button
-                        onClick={() => patchJob.mutate({ id: job.id, data: { status: "assigned" } })}
+                        onClick={(e) => { e.stopPropagation(); patchJob.mutate({ id: job.id, data: { status: "assigned" } }); }}
                         disabled={patchJob.isPending}
                         className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full hover:bg-blue-200 transition-colors disabled:opacity-50"
                       >
