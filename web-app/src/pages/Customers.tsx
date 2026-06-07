@@ -1,6 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState, type FormEvent } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, X, Loader2, Users } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import { api, formatMoney, formatDate } from "../lib/api";
+import { useToast } from "../lib/toast";
 
 interface Customer {
   id: number;
@@ -8,36 +11,110 @@ interface Customer {
   phone: string | null;
   email: string | null;
   tier: string;
-  mrrCents: number;
-  churnRiskScore: number | null;
+  mrr: number;
+  churnRisk: number | null;
   createdAt: string;
   address: string | null;
-  notes: string | null;
 }
 
 function ChurnRiskBar({ score }: { score: number | null }) {
-  if (score === null) return <span className="text-gray-300 text-xs">—</span>;
+  if (score === null || score === undefined) return <span className="text-gray-300 text-xs">—</span>;
   const pct = Math.round(score * 100);
-  const color =
-    pct >= 70
-      ? "bg-red-500"
-      : pct >= 40
-      ? "bg-yellow-400"
-      : "bg-green-500";
+  const color = pct >= 70 ? "bg-red-500" : pct >= 40 ? "bg-yellow-400" : "bg-green-500";
   return (
     <div className="flex items-center gap-2">
       <div className="w-20 h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full ${color}`}
-          style={{ width: `${pct}%` }}
-        />
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
       </div>
       <span className="text-xs text-gray-500">{pct}%</span>
     </div>
   );
 }
 
+function NewCustomerModal({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [form, setForm] = useState({ name: "", phone: "", email: "", address: "", tier: "standard" });
+  const [error, setError] = useState<string | null>(null);
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  const create = useMutation({
+    mutationFn: () =>
+      api.post("/customers", {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim() || undefined,
+        address: form.address.trim(),
+        tier: form.tier,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      toast("Customer added");
+      onClose();
+    },
+    onError: () => setError("Could not add the customer. Check the fields."),
+  });
+
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (!form.name || !form.phone || !form.address) {
+      setError("Name, phone, and address are required.");
+      return;
+    }
+    create.mutate();
+  }
+
+  const field = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900">New Customer</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X className="h-5 w-5" /></button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Name</label>
+            <input value={form.name} onChange={(e) => set("name", e.target.value)} className={field} placeholder="Sarah Johnson" autoFocus />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Phone</label>
+              <input value={form.phone} onChange={(e) => set("phone", e.target.value)} className={field} placeholder="+1 404 555 1234" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Tier</label>
+              <select value={form.tier} onChange={(e) => set("tier", e.target.value)} className={field}>
+                <option value="standard">Standard</option>
+                <option value="premium">Premium</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Email</label>
+            <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={field} placeholder="sarah@email.com (optional)" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Address</label>
+            <input value={form.address} onChange={(e) => set("address", e.target.value)} className={field} placeholder="42 Oak St, Atlanta, GA" />
+          </div>
+          {error && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+          <div className="flex justify-end gap-2 pt-2">
+            <button type="button" onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+            <button type="submit" disabled={create.isPending} className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60">
+              {create.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Add customer
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function Customers() {
+  const [showNew, setShowNew] = useState(false);
   const { data: customers, isLoading } = useQuery<Customer[]>({
     queryKey: ["customers"],
     queryFn: () => api.get("/customers?sort=mrr"),
@@ -48,87 +125,60 @@ export default function Customers() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {customers?.length ?? 0} customers · sorted by MRR
-          </p>
+          <p className="text-sm text-gray-500 mt-1">{customers?.length ?? 0} customers</p>
         </div>
+        <button
+          onClick={() => setShowNew(true)}
+          className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+        >
+          <Plus className="w-4 h-4" /> New Customer
+        </button>
       </div>
+
+      {showNew && <NewCustomerModal onClose={() => setShowNew(false)} />}
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
-              {[
-                "Name",
-                "Phone",
-                "Email",
-                "Tier",
-                "MRR",
-                "Churn Risk",
-                "Member Since",
-              ].map((h) => (
-                <th
-                  key={h}
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
-                >
-                  {h}
-                </th>
+              {["Name", "Phone", "Email", "Tier", "MRR", "Churn Risk", "Member Since"].map((h) => (
+                <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-6 py-8 text-center text-gray-400"
-                >
-                  Loading customers...
-                </td>
-              </tr>
+              <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400">Loading customers...</td></tr>
             )}
             {customers?.map((c) => (
               <tr key={c.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {c.name}
-                    </p>
-                    {c.address && (
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {c.address}
-                      </p>
-                    )}
-                  </div>
+                  <p className="text-sm font-medium text-gray-900">{c.name}</p>
+                  {c.address && <p className="text-xs text-gray-400 mt-0.5">{c.address}</p>}
                 </td>
-                <td className="px-6 py-4 text-sm text-gray-600">
-                  {c.phone ?? "—"}
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-600">
-                  {c.email ?? "—"}
-                </td>
-                <td className="px-6 py-4">
-                  <StatusBadge status={c.tier} />
-                </td>
+                <td className="px-6 py-4 text-sm text-gray-600">{c.phone ?? "—"}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{c.email ?? "—"}</td>
+                <td className="px-6 py-4"><StatusBadge status={c.tier} /></td>
                 <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                  {formatMoney(c.mrrCents)}
-                  <span className="text-gray-400 font-normal">/mo</span>
+                  {formatMoney(c.mrr ?? 0)}<span className="text-gray-400 font-normal">/mo</span>
                 </td>
-                <td className="px-6 py-4">
-                  <ChurnRiskBar score={c.churnRiskScore} />
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500">
-                  {formatDate(c.createdAt)}
-                </td>
+                <td className="px-6 py-4"><ChurnRiskBar score={c.churnRisk} /></td>
+                <td className="px-6 py-4 text-sm text-gray-500">{formatDate(c.createdAt)}</td>
               </tr>
             ))}
             {!isLoading && !customers?.length && (
               <tr>
-                <td
-                  colSpan={7}
-                  className="px-6 py-8 text-center text-gray-400"
-                >
-                  No customers yet
+                <td colSpan={7} className="px-6 py-12">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                      <Users className="h-6 w-6 text-gray-400" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-900">No customers yet</p>
+                    <p className="mt-1 text-sm text-gray-500">Add your first customer to start quoting and scheduling.</p>
+                    <button onClick={() => setShowNew(true)} className="mt-4 flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700">
+                      <Plus className="h-4 w-4" /> Add your first customer
+                    </button>
+                  </div>
                 </td>
               </tr>
             )}

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, X, Loader2 } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import { api, formatMoney, formatDate } from "../lib/api";
+import { useToast } from "../lib/toast";
 
 const STATUS_TABS = [
   "all",
@@ -41,6 +42,7 @@ interface Customer {
 
 function NewJobModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
+  const toast = useToast();
   const { data: customers } = useQuery<Customer[]>({
     queryKey: ["customers"],
     queryFn: () => api.get("/customers"),
@@ -64,6 +66,7 @@ function NewJobModal({ onClose }: { onClose: () => void }) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["jobs"] });
+      toast("Job created");
       onClose();
     },
     onError: () => setError("Could not create the job. Check the fields and try again."),
