@@ -7,6 +7,7 @@ import { quotesTable } from "./quotes";
 
 export const jobsTable = pgTable("jobs", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
   customerId: integer("customer_id").notNull().references(() => customersTable.id, { onDelete: "cascade" }),
   propertyId: integer("property_id").references(() => propertiesTable.id),
   quoteId: integer("quote_id").references(() => quotesTable.id),
@@ -20,6 +21,6 @@ export const jobsTable = pgTable("jobs", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertJobSchema = createInsertSchema(jobsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertJobSchema = createInsertSchema(jobsTable).omit({ id: true, orgId: true, createdAt: true, updatedAt: true });
 export type InsertJob = z.infer<typeof insertJobSchema>;
 export type Job = typeof jobsTable.$inferSelect;

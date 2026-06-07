@@ -26,13 +26,13 @@ function calcChurnRisk(
   return Math.min(score, 1.0);
 }
 
-export async function runChurnPrevention(): Promise<void> {
+export async function runChurnPrevention(orgId: number): Promise<void> {
   logger.info("Running churn prevention agent");
 
   const customers = await db
     .select()
     .from(customersTable)
-    .where(ne(customersTable.tier, "suspended"));
+    .where(and(eq(customersTable.orgId, orgId), ne(customersTable.tier, "suspended")));
 
   let highRiskCount = 0;
 
@@ -42,6 +42,7 @@ export async function runChurnPrevention(): Promise<void> {
       .from(jobsTable)
       .where(
         and(
+          eq(jobsTable.orgId, orgId),
           eq(jobsTable.customerId, customer.id),
           ne(jobsTable.status, "cancelled")
         )
@@ -52,6 +53,7 @@ export async function runChurnPrevention(): Promise<void> {
       .from(invoicesTable)
       .where(
         and(
+          eq(invoicesTable.orgId, orgId),
           eq(invoicesTable.customerId, customer.id),
           eq(invoicesTable.status, "overdue")
         )
@@ -60,7 +62,7 @@ export async function runChurnPrevention(): Promise<void> {
     const escalations = await db
       .select()
       .from(escalationsTable)
-      .where(eq(escalationsTable.customerId, customer.id));
+      .where(and(eq(escalationsTable.orgId, orgId), eq(escalationsTable.customerId, customer.id)));
 
     const lastJob = jobs.sort(
       (a, b) =>
@@ -83,7 +85,7 @@ export async function runChurnPrevention(): Promise<void> {
     await db
       .update(customersTable)
       .set({ churnRisk })
-      .where(eq(customersTable.id, customer.id));
+      .where(and(eq(customersTable.orgId, orgId), eq(customersTable.id, customer.id)));
 
     if (churnRisk > 0.7) {
       highRiskCount++;
@@ -136,6 +138,7 @@ export async function runChurnPrevention(): Promise<void> {
       await sendSms(customer.phone, smsBody).catch(() => {});
 
       await db.insert(aiDecisionsTable).values({
+        orgId,
         agent: "churn",
         input: {
           customerId: customer.id,

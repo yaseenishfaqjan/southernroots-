@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql, ne } from "drizzle-orm";
 import { db, jobsTable, assignmentsTable, subcontractorsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -18,21 +19,22 @@ function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number):
 
 // GET /matching/contractors-near/:jobId  — find online contractors near a job
 router.get("/matching/contractors-near/:jobId", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   const jobId = parseInt(req.params.jobId);
   if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
 
   const radiusMiles = parseFloat(String(req.query.radius ?? "10"));
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  const [job] = await db.select().from(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, jobId)));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
   if (!job.latitude || !job.longitude) { res.status(400).json({ error: "Job has no location" }); return; }
 
-  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.isOnline, true));
+  const subs = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.isOnline, true)));
 
   const jLat = parseFloat(String(job.latitude));
   const jLng = parseFloat(String(job.longitude));
 
-  const allSubs = await db.select().from(subcontractorsTable);
+  const allSubs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.orgId, orgId));
 
   const nearby = allSubs
     .filter((s) => s.latitude && s.longitude)
@@ -63,21 +65,22 @@ const DispatchBody = z.object({
 });
 
 router.post("/matching/dispatch", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   const parsed = DispatchBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { jobId, contractorId } = parsed.data;
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  const [job] = await db.select().from(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, jobId)));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
 
   let selectedSub: typeof subcontractorsTable.$inferSelect | undefined;
 
   if (contractorId) {
-    const [s] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, contractorId));
+    const [s] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, contractorId)));
     selectedSub = s;
   } else {
     // Auto-dispatch: pick the best online contractor nearby
-    const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.isOnline, true));
+    const subs = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.isOnline, true)));
     const jLat = job.latitude ? parseFloat(String(job.latitude)) : null;
     const jLng = job.longitude ? parseFloat(String(job.longitude)) : null;
 
@@ -112,11 +115,12 @@ router.post("/matching/dispatch", async (req, res): Promise<void> => {
   const ownerProfit = parseFloat((customerPrice - subPay).toFixed(2));
 
   // Delete any previous assignment
-  await db.delete(assignmentsTable).where(eq(assignmentsTable.jobId, jobId));
+  await db.delete(assignmentsTable).where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.jobId, jobId)));
 
   const [assignment] = await db
     .insert(assignmentsTable)
     .values({
+      orgId,
       jobId,
       subcontractorId: selectedSub.id,
       subPay: String(subPay),
@@ -125,28 +129,29 @@ router.post("/matching/dispatch", async (req, res): Promise<void> => {
     })
     .returning();
 
-  await db.update(jobsTable).set({ status: "assigned" }).where(eq(jobsTable.id, jobId));
+  await db.update(jobsTable).set({ status: "assigned" }).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, jobId)));
 
   res.json({ success: true, assignment, contractorName: selectedSub.name, subPay, ownerProfit });
 });
 
 // GET /matching/surge-price/:jobId  — calculate surge multiplier suggestion
 router.get("/matching/surge-price/:jobId", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   const jobId = parseInt(req.params.jobId);
   if (isNaN(jobId)) { res.status(400).json({ error: "Invalid job ID" }); return; }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+  const [job] = await db.select().from(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, jobId)));
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
 
   const onlineSubs = await db
     .select({ count: sql<number>`count(*)` })
     .from(subcontractorsTable)
-    .where(eq(subcontractorsTable.isOnline, true));
+    .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.isOnline, true)));
 
   const pendingJobs = await db
     .select({ count: sql<number>`count(*)` })
     .from(jobsTable)
-    .where(eq(jobsTable.status, "new"));
+    .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.status, "new")));
 
   const onlineCount = Number(onlineSubs[0]?.count ?? 0);
   const demandCount = Number(pendingJobs[0]?.count ?? 0);

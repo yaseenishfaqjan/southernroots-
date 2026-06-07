@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 import { db, workersTable, jobsTable, assignmentsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -39,11 +40,13 @@ function formatWorker(row: typeof workersTable.$inferSelect) {
 }
 
 // GET /workers
-router.get("/workers", async (_req, res): Promise<void> => {
+router.get("/workers", async (req, res): Promise<void> => {
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const rows = await db
       .select()
       .from(workersTable)
+      .where(eq(workersTable.orgId, orgId))
       .orderBy(desc(workersTable.createdAt));
     res.json(rows.map(formatWorker));
   } catch (err) {
@@ -61,9 +64,11 @@ router.post("/workers", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [worker] = await db
       .insert(workersTable)
       .values({
+        orgId,
         name: parsed.data.name,
         phone: parsed.data.phone,
         email: parsed.data.email ?? null,
@@ -87,10 +92,11 @@ router.get("/workers/:id", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [worker] = await db
       .select()
       .from(workersTable)
-      .where(eq(workersTable.id, params.data.id));
+      .where(and(eq(workersTable.orgId, orgId), eq(workersTable.id, params.data.id)));
 
     if (!worker) {
       res.status(404).json({ error: "Worker not found" });
@@ -112,6 +118,7 @@ router.get("/workers/:id", async (req, res): Promise<void> => {
       .leftJoin(jobsTable, eq(assignmentsTable.jobId, jobsTable.id))
       .where(
         and(
+          eq(assignmentsTable.orgId, orgId),
           eq(assignmentsTable.workerId, params.data.id),
           gte(jobsTable.scheduledDate, todayStart),
           lte(jobsTable.scheduledDate, todayEnd)
@@ -151,10 +158,11 @@ router.patch("/workers/:id", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [updated] = await db
       .update(workersTable)
       .set(parsed.data)
-      .where(eq(workersTable.id, params.data.id))
+      .where(and(eq(workersTable.orgId, orgId), eq(workersTable.id, params.data.id)))
       .returning();
 
     if (!updated) {
@@ -178,6 +186,7 @@ router.get("/workers/:id/jobs", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const rows = await db
       .select({
         assignment: assignmentsTable,
@@ -185,7 +194,7 @@ router.get("/workers/:id/jobs", async (req, res): Promise<void> => {
       })
       .from(assignmentsTable)
       .leftJoin(jobsTable, eq(assignmentsTable.jobId, jobsTable.id))
-      .where(eq(assignmentsTable.workerId, params.data.id))
+      .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.workerId, params.data.id)))
       .orderBy(desc(jobsTable.scheduledDate));
 
     res.json(

@@ -4,10 +4,10 @@ import { logger } from "../lib/logger";
 import { runQuoteAgent } from "../agents/quote-agent";
 
 export type AgentJobData =
-  | { type: "ai-quote"; customerId: number; quoteId: number }
-  | { type: "send-invoice"; invoiceId: number }
-  | { type: "payment-reminder"; invoiceId: number }
-  | { type: "upsell-outreach"; customerId: number; trigger: string };
+  | { type: "ai-quote"; orgId: number; customerId: number; quoteId: number }
+  | { type: "send-invoice"; orgId: number; invoiceId: number }
+  | { type: "payment-reminder"; orgId: number; invoiceId: number }
+  | { type: "upsell-outreach"; orgId: number; customerId: number; trigger: string };
 
 let _queue: Queue | null = null;
 
@@ -32,7 +32,7 @@ export function startQueueWorker(): void {
     async (job) => {
       logger.info({ jobId: job.id, type: job.data.type }, "Processing agent job");
       if (job.data.type === "ai-quote") {
-        await runQuoteAgent(job.data.customerId, job.data.quoteId);
+        await runQuoteAgent(job.data.orgId, job.data.customerId, job.data.quoteId);
       }
       // Other job types are handled by agents that enqueue themselves
     },

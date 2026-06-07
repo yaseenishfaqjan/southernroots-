@@ -16,13 +16,13 @@ interface Opportunity {
   estimatedRevenue: number;
 }
 
-export async function runUpsellScan(): Promise<void> {
+export async function runUpsellScan(orgId: number): Promise<void> {
   logger.info("Running upsell scan");
 
   const customers = await db
     .select()
     .from(customersTable)
-    .where(ne(customersTable.tier, "suspended"));
+    .where(and(eq(customersTable.orgId, orgId), ne(customersTable.tier, "suspended")));
 
   const month = new Date().getMonth() + 1; // 1-12
   const opportunities: Opportunity[] = [];
@@ -33,6 +33,7 @@ export async function runUpsellScan(): Promise<void> {
       .from(jobsTable)
       .where(
         and(
+          eq(jobsTable.orgId, orgId),
           eq(jobsTable.customerId, customer.id),
           ne(jobsTable.status, "cancelled")
         )
@@ -131,6 +132,7 @@ export async function runUpsellScan(): Promise<void> {
   }
 
   await db.insert(aiDecisionsTable).values({
+    orgId,
     agent: "upsell",
     input: {
       customersScanned: customers.length,

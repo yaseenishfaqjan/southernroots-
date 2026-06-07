@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db, quotesTable, jobsTable, customersTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -30,9 +31,12 @@ router.get("/quotes", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     let q = db.select().from(quotesTable).$dynamic();
     if (query.data.status) {
-      q = q.where(eq(quotesTable.status, query.data.status));
+      q = q.where(and(eq(quotesTable.orgId, orgId), eq(quotesTable.status, query.data.status)));
+    } else {
+      q = q.where(eq(quotesTable.orgId, orgId));
     }
     const rows = await q.orderBy(desc(quotesTable.createdAt));
     res.json(rows.map(formatQuote));
@@ -51,10 +55,11 @@ router.get("/quotes/:id", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [quote] = await db
       .select()
       .from(quotesTable)
-      .where(eq(quotesTable.id, params.data.id));
+      .where(and(eq(quotesTable.orgId, orgId), eq(quotesTable.id, params.data.id)));
 
     if (!quote) {
       res.status(404).json({ error: "Quote not found" });
@@ -77,10 +82,11 @@ router.post("/quotes/:id/accept", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [quote] = await db
       .select()
       .from(quotesTable)
-      .where(eq(quotesTable.id, params.data.id));
+      .where(and(eq(quotesTable.orgId, orgId), eq(quotesTable.id, params.data.id)));
 
     if (!quote) {
       res.status(404).json({ error: "Quote not found" });
@@ -96,7 +102,7 @@ router.post("/quotes/:id/accept", async (req, res): Promise<void> => {
     const [updatedQuote] = await db
       .update(quotesTable)
       .set({ status: "accepted", acceptedAt: new Date() })
-      .where(eq(quotesTable.id, params.data.id))
+      .where(and(eq(quotesTable.orgId, orgId), eq(quotesTable.id, params.data.id)))
       .returning();
 
     // Determine service type from services array
@@ -110,6 +116,7 @@ router.post("/quotes/:id/accept", async (req, res): Promise<void> => {
     const [job] = await db
       .insert(jobsTable)
       .values({
+        orgId,
         customerId: quote.customerId,
         propertyId: quote.propertyId ?? undefined,
         quoteId: quote.id,
@@ -144,10 +151,11 @@ router.post("/quotes/:id/decline", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [updated] = await db
       .update(quotesTable)
       .set({ status: "declined" })
-      .where(eq(quotesTable.id, params.data.id))
+      .where(and(eq(quotesTable.orgId, orgId), eq(quotesTable.id, params.data.id)))
       .returning();
 
     if (!updated) {

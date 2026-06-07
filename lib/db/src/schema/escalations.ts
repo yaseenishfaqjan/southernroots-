@@ -6,6 +6,7 @@ import { jobsTable } from "./jobs";
 
 export const escalationsTable = pgTable("escalations", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
   customerId: integer("customer_id").references(() => customersTable.id),
   jobId: integer("job_id").references(() => jobsTable.id),
   reason: text("reason").notNull(),
@@ -16,6 +17,6 @@ export const escalationsTable = pgTable("escalations", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertEscalationSchema = createInsertSchema(escalationsTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertEscalationSchema = createInsertSchema(escalationsTable).omit({ id: true, orgId: true, createdAt: true, updatedAt: true });
 export type InsertEscalation = z.infer<typeof insertEscalationSchema>;
 export type Escalation = typeof escalationsTable.$inferSelect;

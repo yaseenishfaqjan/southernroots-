@@ -12,7 +12,7 @@ import { sendSms } from "../lib/twilio";
 import { sendEmail } from "../lib/resend";
 import { logger } from "../lib/logger";
 
-export async function sendOwnerBriefing(): Promise<void> {
+export async function sendOwnerBriefing(orgId: number): Promise<void> {
   logger.info("Running owner briefing agent");
 
   const yesterday = new Date();
@@ -26,6 +26,7 @@ export async function sendOwnerBriefing(): Promise<void> {
     .from(jobsTable)
     .where(
       and(
+        eq(jobsTable.orgId, orgId),
         gte(jobsTable.completedAt, yesterday),
         lt(jobsTable.completedAt, today)
       )
@@ -36,6 +37,7 @@ export async function sendOwnerBriefing(): Promise<void> {
     .from(jobsTable)
     .where(
       and(
+        eq(jobsTable.orgId, orgId),
         gte(jobsTable.completedAt, yesterday),
         eq(jobsTable.status, "paid")
       )
@@ -48,6 +50,7 @@ export async function sendOwnerBriefing(): Promise<void> {
     .from(customersTable)
     .where(
       and(
+        eq(customersTable.orgId, orgId),
         gte(customersTable.createdAt, yesterday),
         lte(customersTable.createdAt, today)
       )
@@ -59,13 +62,14 @@ export async function sendOwnerBriefing(): Promise<void> {
       count: sql<string>`count(*)`,
     })
     .from(invoicesTable)
-    .where(eq(invoicesTable.status, "sent"));
+    .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.status, "sent")));
 
   const allWorkerJobs = await db
     .select()
     .from(jobsTable)
     .where(
       and(
+        eq(jobsTable.orgId, orgId),
         gte(jobsTable.scheduledDate, yesterday),
         lte(jobsTable.scheduledDate, today)
       )
@@ -79,7 +83,7 @@ export async function sendOwnerBriefing(): Promise<void> {
   const mrrResult = await db
     .select({ total: sql<string>`sum(mrr)` })
     .from(customersTable)
-    .where(eq(customersTable.tier, "standard"));
+    .where(and(eq(customersTable.orgId, orgId), eq(customersTable.tier, "standard")));
   const mrrCents = parseInt(mrrResult[0]?.total ?? "0");
 
   const kpiData = {
@@ -136,6 +140,7 @@ export async function sendOwnerBriefing(): Promise<void> {
 
   // Save KPI snapshot
   await db.insert(kpiSnapshotsTable).values({
+    orgId,
     date: yesterday,
     totalRevenueCents,
     jobsCompleted: completedJobs.length,
@@ -146,6 +151,7 @@ export async function sendOwnerBriefing(): Promise<void> {
   });
 
   await db.insert(aiDecisionsTable).values({
+    orgId,
     agent: "briefing",
     input: kpiData,
     output: { briefingText },

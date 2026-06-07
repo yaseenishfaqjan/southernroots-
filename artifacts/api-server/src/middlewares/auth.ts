@@ -29,6 +29,16 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
   }
 }
 
+// Returns the tenant (organization) id for the authenticated request.
+// Throws if there is no auth context — callers must run requireAuth first.
+export function getOrgId(req: AuthedRequest): number {
+  const orgId = req.user?.orgId;
+  if (!orgId) {
+    throw new Error("Missing tenant context (orgId) — requireAuth must run first");
+  }
+  return orgId;
+}
+
 // Requires req.user.role to be one of the allowed roles. Use after requireAuth.
 export function requireRole(...roles: string[]) {
   return (req: AuthedRequest, res: Response, next: NextFunction): void => {

@@ -6,6 +6,7 @@ import { jobsTable } from "./jobs";
 
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
   customerId: integer("customer_id").notNull().references(() => customersTable.id, { onDelete: "cascade" }),
   jobId: integer("job_id").references(() => jobsTable.id),
   stripeInvoiceId: text("stripe_invoice_id"),
@@ -20,6 +21,6 @@ export const invoicesTable = pgTable("invoices", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({ id: true, orgId: true, createdAt: true, updatedAt: true });
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type Invoice = typeof invoicesTable.$inferSelect;

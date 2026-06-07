@@ -6,6 +6,7 @@ import { propertiesTable } from "./properties";
 
 export const quotesTable = pgTable("quotes", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
   customerId: integer("customer_id").notNull().references(() => customersTable.id, { onDelete: "cascade" }),
   propertyId: integer("property_id").references(() => propertiesTable.id),
   services: jsonb("services"), // [{name, price, description}]
@@ -19,6 +20,6 @@ export const quotesTable = pgTable("quotes", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertQuoteSchema = createInsertSchema(quotesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertQuoteSchema = createInsertSchema(quotesTable).omit({ id: true, orgId: true, createdAt: true, updatedAt: true });
 export type InsertQuote = z.infer<typeof insertQuoteSchema>;
 export type Quote = typeof quotesTable.$inferSelect;

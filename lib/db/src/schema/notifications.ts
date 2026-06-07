@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const notificationsTable = pgTable("notifications", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
   type: text("type").notNull(),
   title: text("title").notNull(),
   body: text("body").notNull(),
@@ -13,6 +14,6 @@ export const notificationsTable = pgTable("notifications", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertNotificationSchema = createInsertSchema(notificationsTable).omit({ id: true, createdAt: true });
+export const insertNotificationSchema = createInsertSchema(notificationsTable).omit({ id: true, orgId: true, createdAt: true });
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notificationsTable.$inferSelect;

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   db,
   customersTable,
@@ -18,22 +18,23 @@ import { logger } from "../lib/logger";
 const LOW_CONFIDENCE_THRESHOLD = 0.5;
 
 export async function runQuoteAgent(
+  orgId: number,
   customerId: number,
   quoteId: number
 ): Promise<void> {
   const [customer] = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.id, customerId));
+    .where(and(eq(customersTable.orgId, orgId), eq(customersTable.id, customerId)));
   if (!customer) {
-    logger.error({ customerId }, "Quote agent: customer not found");
+    logger.error({ orgId, customerId }, "Quote agent: customer not found");
     return;
   }
 
   const [quote] = await db
     .select()
     .from(quotesTable)
-    .where(eq(quotesTable.id, quoteId));
+    .where(and(eq(quotesTable.orgId, orgId), eq(quotesTable.id, quoteId)));
   if (!quote) {
     logger.error({ quoteId }, "Quote agent: quote not found");
     return;
@@ -95,9 +96,10 @@ export async function runQuoteAgent(
   const [existingProperty] = await db
     .select()
     .from(propertiesTable)
-    .where(eq(propertiesTable.customerId, customerId));
+    .where(and(eq(propertiesTable.orgId, orgId), eq(propertiesTable.customerId, customerId)));
 
   const propertyValues = {
+    orgId,
     customerId,
     address: geo?.formattedAddress ?? customer.address,
     lat: geo?.lat ?? null,
@@ -112,7 +114,7 @@ export async function runQuoteAgent(
     await db
       .update(propertiesTable)
       .set(propertyValues)
-      .where(eq(propertiesTable.id, existingProperty.id));
+      .where(and(eq(propertiesTable.orgId, orgId), eq(propertiesTable.id, existingProperty.id)));
   } else {
     await db.insert(propertiesTable).values(propertyValues);
   }
@@ -131,7 +133,7 @@ export async function runQuoteAgent(
       aiReasoning: reasoning,
       sentAt: new Date(),
     })
-    .where(eq(quotesTable.id, quoteId));
+    .where(and(eq(quotesTable.orgId, orgId), eq(quotesTable.id, quoteId)));
 
   // ── Step 6: Claude writes the customer-facing SMS (numbers come from us) ──
   let smsBody = buildFallbackSms(customer.name, customer.address, pricing.totalMonthly);
@@ -175,6 +177,7 @@ export async function runQuoteAgent(
 
   // ── Step 8: Log the AI decision for auditability ─────────────────────────
   await db.insert(aiDecisionsTable).values({
+    orgId,
     agent: "quote",
     input: { customerId, address: customer.address, servicesWanted },
     output: { measurement, pricing, measured, lowConfidence },

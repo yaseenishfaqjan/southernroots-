@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, sql, count, and } from "drizzle-orm";
 import { db, subcontractorsTable, assignmentsTable, jobsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -14,7 +15,8 @@ router.get("/dispatch/suggestions/:jobId", async (req, res): Promise<void> => {
     return;
   }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.jobId));
+  const orgId = getOrgId(req as AuthedRequest);
+  const [job] = await db.select().from(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, params.data.jobId)));
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -23,7 +25,7 @@ router.get("/dispatch/suggestions/:jobId", async (req, res): Promise<void> => {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
-  const subs = await db.select().from(subcontractorsTable);
+  const subs = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.orgId, orgId));
 
   const suggestions = await Promise.all(
     subs.map(async (sub) => {
@@ -32,6 +34,7 @@ router.get("/dispatch/suggestions/:jobId", async (req, res): Promise<void> => {
         .from(assignmentsTable)
         .where(
           and(
+            eq(assignmentsTable.orgId, orgId),
             eq(assignmentsTable.subcontractorId, sub.id),
             sql`${assignmentsTable.status} in ('pending', 'in_progress')`
           )
@@ -42,6 +45,7 @@ router.get("/dispatch/suggestions/:jobId", async (req, res): Promise<void> => {
         .from(assignmentsTable)
         .where(
           and(
+            eq(assignmentsTable.orgId, orgId),
             eq(assignmentsTable.subcontractorId, sub.id),
             sql`${assignmentsTable.assignedAt} >= ${todayStart}`
           )

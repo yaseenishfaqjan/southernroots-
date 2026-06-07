@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db, jobsTable, assignmentsTable, subcontractorsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -68,7 +69,8 @@ router.get("/worker/profile/:subId", async (req, res): Promise<void> => {
   const params = WorkerJobsParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
-  const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, params.data.subId));
+  const orgId = getOrgId(req as AuthedRequest);
+  const [sub] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, params.data.subId)));
   if (!sub) { res.status(404).json({ error: "Subcontractor not found" }); return; }
 
   res.json({
@@ -89,6 +91,7 @@ router.patch("/worker/profile/:subId/toggle-online", async (req, res): Promise<v
   const parsed = ToggleOnlineBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const updateData: Record<string, unknown> = { isOnline: parsed.data.isOnline };
   if (parsed.data.latitude !== undefined) updateData.latitude = String(parsed.data.latitude);
   if (parsed.data.longitude !== undefined) updateData.longitude = String(parsed.data.longitude);
@@ -96,7 +99,7 @@ router.patch("/worker/profile/:subId/toggle-online", async (req, res): Promise<v
   const [updated] = await db
     .update(subcontractorsTable)
     .set(updateData as any)
-    .where(eq(subcontractorsTable.id, params.data.subId))
+    .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, params.data.subId)))
     .returning();
 
   if (!updated) { res.status(404).json({ error: "Subcontractor not found" }); return; }
@@ -108,6 +111,7 @@ router.get("/worker/jobs/:subId", async (req, res): Promise<void> => {
   const params = WorkerJobsParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const assignments = await db
     .select({
       assignmentId: assignmentsTable.id,
@@ -125,7 +129,7 @@ router.get("/worker/jobs/:subId", async (req, res): Promise<void> => {
       etaMinutes: assignmentsTable.etaMinutes,
     })
     .from(assignmentsTable)
-    .where(eq(assignmentsTable.subcontractorId, params.data.subId));
+    .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.subcontractorId, params.data.subId)));
 
   if (assignments.length === 0) { res.json([]); return; }
 
@@ -133,7 +137,7 @@ router.get("/worker/jobs/:subId", async (req, res): Promise<void> => {
   const jobMap = new Map(
     await Promise.all(
       jobIds.map(async (id) => {
-        const [j] = await db.select().from(jobsTable).where(eq(jobsTable.id, id));
+        const [j] = await db.select().from(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, id)));
         return [id, j] as [number, typeof j];
       })
     )
@@ -155,6 +159,7 @@ router.get("/worker/earnings/:subId", async (req, res): Promise<void> => {
   const params = WorkerJobsParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const rows = await db
     .select({
       subPay: assignmentsTable.subPay,
@@ -164,7 +169,7 @@ router.get("/worker/earnings/:subId", async (req, res): Promise<void> => {
     })
     .from(assignmentsTable)
     .leftJoin(jobsTable, eq(assignmentsTable.jobId, jobsTable.id))
-    .where(eq(assignmentsTable.subcontractorId, params.data.subId));
+    .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.subcontractorId, params.data.subId)));
 
   const completed = rows.filter((r) => r.status === "complete");
   const totalEarned = completed.reduce((s, r) => s + parseFloat(String(r.subPay)), 0);
@@ -200,6 +205,7 @@ router.patch("/worker/assignments/:id/status", async (req, res): Promise<void> =
   const parsed = UpdateStatusBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const now = new Date();
   const updateData: Record<string, unknown> = { status: parsed.data.status };
 
@@ -218,18 +224,18 @@ router.patch("/worker/assignments/:id/status", async (req, res): Promise<void> =
   const [updated] = await db
     .update(assignmentsTable)
     .set(updateData as any)
-    .where(eq(assignmentsTable.id, params.data.id))
+    .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.id, params.data.id)))
     .returning();
 
   if (!updated) { res.status(404).json({ error: "Assignment not found" }); return; }
 
   // Sync job status
   if (parsed.data.status === "accepted") {
-    await db.update(jobsTable).set({ status: "assigned" }).where(eq(jobsTable.id, updated.jobId));
+    await db.update(jobsTable).set({ status: "assigned" }).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, updated.jobId)));
   } else if (parsed.data.status === "en_route" || parsed.data.status === "arrived") {
-    await db.update(jobsTable).set({ status: "in_progress" }).where(eq(jobsTable.id, updated.jobId));
+    await db.update(jobsTable).set({ status: "in_progress" }).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, updated.jobId)));
   } else if (parsed.data.status === "complete") {
-    await db.update(jobsTable).set({ status: "complete" }).where(eq(jobsTable.id, updated.jobId));
+    await db.update(jobsTable).set({ status: "complete" }).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, updated.jobId)));
     // Update sub stats
     await db
       .update(subcontractorsTable)
@@ -237,13 +243,13 @@ router.patch("/worker/assignments/:id/status", async (req, res): Promise<void> =
         totalJobs: sql`total_jobs + 1`,
         totalEarnings: sql`total_earnings + ${updated.subPay}`,
       })
-      .where(eq(subcontractorsTable.id, updated.subcontractorId));
+      .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, updated.subcontractorId)));
   }
 
   const [subRow] = await db
     .select({ name: subcontractorsTable.name })
     .from(subcontractorsTable)
-    .where(eq(subcontractorsTable.id, updated.subcontractorId));
+    .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, updated.subcontractorId)));
 
   res.json({
     ...updated,
@@ -265,10 +271,11 @@ router.post("/worker/rate", async (req, res): Promise<void> => {
   const parsed = RateBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const [job] = await db
     .update(jobsTable)
     .set({ customerRating: parsed.data.rating, customerReview: parsed.data.review ?? null, ratedAt: new Date() })
-    .where(eq(jobsTable.id, parsed.data.jobId))
+    .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, parsed.data.jobId)))
     .returning();
 
   if (!job) { res.status(404).json({ error: "Job not found" }); return; }
@@ -277,10 +284,10 @@ router.post("/worker/rate", async (req, res): Promise<void> => {
   const [assignment] = await db
     .select({ subcontractorId: assignmentsTable.subcontractorId })
     .from(assignmentsTable)
-    .where(eq(assignmentsTable.jobId, parsed.data.jobId));
+    .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.jobId, parsed.data.jobId)));
 
   if (assignment) {
-    const [sub] = await db.select().from(subcontractorsTable).where(eq(subcontractorsTable.id, assignment.subcontractorId));
+    const [sub] = await db.select().from(subcontractorsTable).where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, assignment.subcontractorId)));
     if (sub) {
       const oldRating = parseFloat(String(sub.rating));
       const totalJobs = sub.totalJobs || 1;
@@ -288,7 +295,7 @@ router.post("/worker/rate", async (req, res): Promise<void> => {
       await db
         .update(subcontractorsTable)
         .set({ rating: String(Math.min(5, Math.max(1, newRating)).toFixed(2)) })
-        .where(eq(subcontractorsTable.id, sub.id));
+        .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, sub.id)));
     }
   }
 

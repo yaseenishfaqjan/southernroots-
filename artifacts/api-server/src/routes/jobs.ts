@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, isNotNull, lte, sql } from "drizzle-orm";
+import { and, eq, desc, isNotNull, lte, sql } from "drizzle-orm";
 import { db, jobsTable, assignmentsTable, subcontractorsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import {
   ListJobsQueryParams,
   CreateJobBody,
@@ -16,8 +17,8 @@ import {
 
 const router: IRouter = Router();
 
-async function getJobWithAssignment(jobId: number) {
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, jobId));
+async function getJobWithAssignment(jobId: number, orgId: number) {
+  const [job] = await db.select().from(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, jobId)));
   if (!job) return null;
 
   const [assignmentRow] = await db
@@ -34,7 +35,7 @@ async function getJobWithAssignment(jobId: number) {
     })
     .from(assignmentsTable)
     .leftJoin(subcontractorsTable, eq(assignmentsTable.subcontractorId, subcontractorsTable.id))
-    .where(eq(assignmentsTable.jobId, jobId));
+    .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.jobId, jobId)));
 
   return {
     ...job,
@@ -59,9 +60,12 @@ router.get("/jobs", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   let query = db.select().from(jobsTable).$dynamic();
   if (parsed.data.status) {
-    query = query.where(eq(jobsTable.status, parsed.data.status));
+    query = query.where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.status, parsed.data.status)));
+  } else {
+    query = query.where(eq(jobsTable.orgId, orgId));
   }
 
   const jobs = await query.orderBy(desc(jobsTable.createdAt));
@@ -83,6 +87,7 @@ router.get("/jobs", async (req, res): Promise<void> => {
           })
           .from(assignmentsTable)
           .leftJoin(subcontractorsTable, eq(assignmentsTable.subcontractorId, subcontractorsTable.id))
+          .where(eq(assignmentsTable.orgId, orgId))
       : [];
 
   const assignmentMap = new Map(assignments.map((a) => [a.jobId, a]));
@@ -115,9 +120,11 @@ router.post("/jobs", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const [job] = await db
     .insert(jobsTable)
     .values({
+      orgId,
       ...parsed.data,
       customerPrice: parsed.data.customerPrice != null ? String(parsed.data.customerPrice) : null,
     })
@@ -131,12 +138,13 @@ router.post("/jobs", async (req, res): Promise<void> => {
   });
 });
 
-router.get("/jobs/stale", async (_req, res): Promise<void> => {
+router.get("/jobs/stale", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   const staleThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000);
   const jobs = await db
     .select()
     .from(jobsTable)
-    .where(sql`${jobsTable.status} = 'new' and ${jobsTable.createdAt} <= ${staleThreshold}`)
+    .where(and(eq(jobsTable.orgId, orgId), sql`${jobsTable.status} = 'new' and ${jobsTable.createdAt} <= ${staleThreshold}`))
     .orderBy(desc(jobsTable.createdAt));
 
   res.json(
@@ -149,8 +157,9 @@ router.get("/jobs/stale", async (_req, res): Promise<void> => {
   );
 });
 
-router.get("/jobs/recent", async (_req, res): Promise<void> => {
-  const jobs = await db.select().from(jobsTable).orderBy(desc(jobsTable.createdAt)).limit(10);
+router.get("/jobs/recent", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
+  const jobs = await db.select().from(jobsTable).where(eq(jobsTable.orgId, orgId)).orderBy(desc(jobsTable.createdAt)).limit(10);
 
   const jobIds = jobs.map((j) => j.id);
   const assignments =
@@ -169,6 +178,7 @@ router.get("/jobs/recent", async (_req, res): Promise<void> => {
           })
           .from(assignmentsTable)
           .leftJoin(subcontractorsTable, eq(assignmentsTable.subcontractorId, subcontractorsTable.id))
+          .where(eq(assignmentsTable.orgId, orgId))
       : [];
 
   const assignmentMap = new Map(assignments.map((a) => [a.jobId, a]));
@@ -201,7 +211,8 @@ router.get("/jobs/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const job = await getJobWithAssignment(params.data.id);
+  const orgId = getOrgId(req as AuthedRequest);
+  const job = await getJobWithAssignment(params.data.id, orgId);
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -223,6 +234,7 @@ router.patch("/jobs/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const updateData: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.customerPrice != null) {
     updateData.customerPrice = String(parsed.data.customerPrice);
@@ -231,7 +243,7 @@ router.patch("/jobs/:id", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(jobsTable)
     .set(updateData as Parameters<typeof db.update>[0] extends infer T ? T : never)
-    .where(eq(jobsTable.id, params.data.id))
+    .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, params.data.id)))
     .returning();
 
   if (!updated) {
@@ -239,7 +251,7 @@ router.patch("/jobs/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const job = await getJobWithAssignment(params.data.id);
+  const job = await getJobWithAssignment(params.data.id, orgId);
   res.json(job);
 });
 
@@ -250,7 +262,8 @@ router.delete("/jobs/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [deleted] = await db.delete(jobsTable).where(eq(jobsTable.id, params.data.id)).returning();
+  const orgId = getOrgId(req as AuthedRequest);
+  const [deleted] = await db.delete(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, params.data.id))).returning();
 
   if (!deleted) {
     res.status(404).json({ error: "Job not found" });
@@ -273,7 +286,8 @@ router.post("/jobs/:id/assign", async (req, res): Promise<void> => {
     return;
   }
 
-  const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, params.data.id));
+  const orgId = getOrgId(req as AuthedRequest);
+  const [job] = await db.select().from(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, params.data.id)));
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -282,7 +296,7 @@ router.post("/jobs/:id/assign", async (req, res): Promise<void> => {
   const [sub] = await db
     .select()
     .from(subcontractorsTable)
-    .where(eq(subcontractorsTable.id, parsed.data.subcontractorId));
+    .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, parsed.data.subcontractorId)));
   if (!sub) {
     res.status(404).json({ error: "Subcontractor not found" });
     return;
@@ -295,14 +309,15 @@ router.post("/jobs/:id/assign", async (req, res): Promise<void> => {
     await db
       .update(jobsTable)
       .set({ customerPrice: String(customerPrice), status: "assigned" })
-      .where(eq(jobsTable.id, params.data.id));
+      .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, params.data.id)));
   } else {
-    await db.update(jobsTable).set({ status: "assigned" }).where(eq(jobsTable.id, params.data.id));
+    await db.update(jobsTable).set({ status: "assigned" }).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, params.data.id)));
   }
 
   const [assignment] = await db
     .insert(assignmentsTable)
     .values({
+      orgId,
       jobId: params.data.id,
       subcontractorId: parsed.data.subcontractorId,
       subPay: String(parsed.data.subPay),
@@ -333,6 +348,7 @@ router.patch("/assignments/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const updateData: Record<string, unknown> = {};
   if (parsed.data.status != null) updateData.status = parsed.data.status;
   if (parsed.data.completedAt != null) updateData.completedAt = new Date(parsed.data.completedAt);
@@ -340,7 +356,7 @@ router.patch("/assignments/:id", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(assignmentsTable)
     .set(updateData as Parameters<typeof db.update>[0] extends infer T ? T : never)
-    .where(eq(assignmentsTable.id, params.data.id))
+    .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.id, params.data.id)))
     .returning();
 
   if (!updated) {
@@ -351,7 +367,7 @@ router.patch("/assignments/:id", async (req, res): Promise<void> => {
   const [subRow] = await db
     .select({ name: subcontractorsTable.name })
     .from(subcontractorsTable)
-    .where(eq(subcontractorsTable.id, updated.subcontractorId));
+    .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, updated.subcontractorId)));
 
   res.json({
     ...updated,

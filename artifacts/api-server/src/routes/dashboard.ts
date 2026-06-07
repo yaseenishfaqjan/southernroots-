@@ -1,11 +1,13 @@
 import { Router, type IRouter } from "express";
-import { eq, count, sum, sql } from "drizzle-orm";
+import { and, eq, count, sum, sql } from "drizzle-orm";
 import { db, jobsTable, assignmentsTable, subcontractorsTable, escalationsTable, notificationsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 
 
 const router: IRouter = Router();
 
-router.get("/dashboard/summary", async (_req, res): Promise<void> => {
+router.get("/dashboard/summary", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   const [jobCounts] = await db
     .select({
       total: count(),
@@ -14,38 +16,44 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
       inProgressJobs: sql<number>`count(*) filter (where ${jobsTable.status} = 'in_progress')`,
       completedJobs: sql<number>`count(*) filter (where ${jobsTable.status} in ('complete', 'paid'))`,
     })
-    .from(jobsTable);
+    .from(jobsTable)
+    .where(eq(jobsTable.orgId, orgId));
 
   const [earningsSums] = await db
     .select({
       totalRevenue: sql<number>`coalesce(sum(${jobsTable.customerPrice}), 0)`,
     })
-    .from(jobsTable);
+    .from(jobsTable)
+    .where(eq(jobsTable.orgId, orgId));
 
   const [assignmentSums] = await db
     .select({
       totalSubPay: sql<number>`coalesce(sum(${assignmentsTable.subPay}), 0)`,
       totalOwnerProfit: sql<number>`coalesce(sum(${assignmentsTable.ownerProfit}), 0)`,
     })
-    .from(assignmentsTable);
+    .from(assignmentsTable)
+    .where(eq(assignmentsTable.orgId, orgId));
 
-  const [subCount] = await db.select({ count: count() }).from(subcontractorsTable);
+  const [subCount] = await db
+    .select({ count: count() })
+    .from(subcontractorsTable)
+    .where(eq(subcontractorsTable.orgId, orgId));
 
   const staleThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000);
   const [staleResult] = await db
     .select({ staleLeads: count() })
     .from(jobsTable)
-    .where(sql`${jobsTable.status} = 'new' and ${jobsTable.createdAt} <= ${staleThreshold}`);
+    .where(and(eq(jobsTable.orgId, orgId), sql`${jobsTable.status} = 'new' and ${jobsTable.createdAt} <= ${staleThreshold}`));
 
   const [pendingEscalationsResult] = await db
     .select({ pendingEscalations: count() })
     .from(escalationsTable)
-    .where(eq(escalationsTable.status, "pending"));
+    .where(and(eq(escalationsTable.orgId, orgId), eq(escalationsTable.status, "pending")));
 
   const [unreadResult] = await db
     .select({ unreadNotifications: count() })
     .from(notificationsTable)
-    .where(eq(notificationsTable.read, false));
+    .where(and(eq(notificationsTable.orgId, orgId), eq(notificationsTable.read, false)));
 
   res.json({
     totalRevenue: parseFloat(String(earningsSums.totalRevenue)),
@@ -63,7 +71,8 @@ router.get("/dashboard/summary", async (_req, res): Promise<void> => {
   });
 });
 
-router.get("/dashboard/charts", async (_req, res): Promise<void> => {
+router.get("/dashboard/charts", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   const byService = await db
     .select({
       name: jobsTable.serviceType,
@@ -71,6 +80,7 @@ router.get("/dashboard/charts", async (_req, res): Promise<void> => {
       revenue: sql<number>`coalesce(sum(${jobsTable.customerPrice}), 0)`,
     })
     .from(jobsTable)
+    .where(eq(jobsTable.orgId, orgId))
     .groupBy(jobsTable.serviceType)
     .orderBy(sql`sum(${jobsTable.customerPrice}) desc nulls last`);
 
@@ -80,6 +90,7 @@ router.get("/dashboard/charts", async (_req, res): Promise<void> => {
       jobs: sql<number>`count(*)`,
     })
     .from(jobsTable)
+    .where(eq(jobsTable.orgId, orgId))
     .groupBy(jobsTable.status);
 
   const bySub = await db
@@ -90,6 +101,7 @@ router.get("/dashboard/charts", async (_req, res): Promise<void> => {
     })
     .from(subcontractorsTable)
     .leftJoin(assignmentsTable, eq(assignmentsTable.subcontractorId, subcontractorsTable.id))
+    .where(eq(subcontractorsTable.orgId, orgId))
     .groupBy(subcontractorsTable.id, subcontractorsTable.name)
     .orderBy(sql`count(${assignmentsTable.id}) desc`);
 

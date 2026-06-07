@@ -5,6 +5,7 @@ import { customersTable } from "./customers";
 
 export const propertiesTable = pgTable("properties", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
   customerId: integer("customer_id").notNull().references(() => customersTable.id, { onDelete: "cascade" }),
   address: text("address").notNull(),
   lat: real("lat"),
@@ -16,6 +17,6 @@ export const propertiesTable = pgTable("properties", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertPropertySchema = createInsertSchema(propertiesTable).omit({ id: true, createdAt: true });
+export const insertPropertySchema = createInsertSchema(propertiesTable).omit({ id: true, orgId: true, createdAt: true });
 export type InsertProperty = z.infer<typeof insertPropertySchema>;
 export type Property = typeof propertiesTable.$inferSelect;

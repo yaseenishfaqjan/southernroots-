@@ -23,21 +23,20 @@ import { requireAuth, requireRole } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
-// AUTH_ENABLED gates whether admin routes require a JWT. Default OFF so the
-// existing dashboards keep working until their login flow is wired up. Flip to
-// "true" once the frontends attach a token (see PRODUCTION_HARDENING.md).
-const AUTH_ENABLED = process.env.AUTH_ENABLED === "true";
-const protect = AUTH_ENABLED ? [requireAuth] : [];
-const ownerOnly = AUTH_ENABLED ? [requireAuth, requireRole("owner", "dispatcher")] : [];
+// Multi-tenant: every business route REQUIRES a valid token so we know which
+// organization the request belongs to. Tenant isolation depends on this.
+const protect = [requireAuth];
+const ownerOnly = [requireAuth, requireRole("owner", "dispatcher")];
 
 // ── Public routes (no auth) ──────────────────────────────────────────────
 router.use(healthRouter);
 router.use(authRouter);
 router.use(webhooksRouter);
-router.use(clientRouter); // client portal: quote accept / service request
-router.use(workerRouter); // legacy worker routes
 
-// ── Protected routes (require auth when AUTH_ENABLED) ─────────────────────
+// ── Protected routes (require a valid tenant token) ───────────────────────
+// NOTE: client/worker portals need their own auth before those apps work again.
+router.use(...protect, clientRouter);
+router.use(...protect, workerRouter);
 router.use(...protect, dashboardRouter);
 router.use(...protect, kpiRouter);
 router.use(...protect, auditRouter);

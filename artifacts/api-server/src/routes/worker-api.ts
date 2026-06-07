@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import { db, workersTable, jobsTable, assignmentsTable } from "@workspace/db";
 import { autoInvoiceJob } from "../agents/billing-agent";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -34,6 +35,7 @@ router.get("/worker/jobs/:workerId", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const assignments = await db
       .select({
         assignment: assignmentsTable,
@@ -41,7 +43,7 @@ router.get("/worker/jobs/:workerId", async (req, res): Promise<void> => {
       })
       .from(assignmentsTable)
       .leftJoin(jobsTable, eq(assignmentsTable.jobId, jobsTable.id))
-      .where(eq(assignmentsTable.workerId, params.data.workerId))
+      .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.workerId, params.data.workerId)))
       .orderBy(desc(jobsTable.scheduledDate));
 
     res.json(
@@ -78,6 +80,7 @@ router.patch(
     }
 
     try {
+      const orgId = getOrgId(req as AuthedRequest);
       const updateData: Record<string, unknown> = {
         status: parsed.data.status,
       };
@@ -91,7 +94,7 @@ router.patch(
       const [updated] = await db
         .update(assignmentsTable)
         .set(updateData as Parameters<typeof db.update>[0] extends infer T ? T : never)
-        .where(eq(assignmentsTable.id, params.data.id))
+        .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.id, params.data.id)))
         .returning();
 
       if (!updated) {
@@ -104,12 +107,12 @@ router.patch(
         await db
           .update(jobsTable)
           .set({ status: "in_progress" })
-          .where(eq(jobsTable.id, updated.jobId));
+          .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, updated.jobId)));
       } else if (parsed.data.status === "complete") {
         await db
           .update(jobsTable)
           .set({ status: "complete", completedAt: new Date() })
-          .where(eq(jobsTable.id, updated.jobId));
+          .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, updated.jobId)));
 
         // Update worker job count
         await db
@@ -117,10 +120,10 @@ router.patch(
           .set({
             currentJobCount: 0, // reset since completed
           })
-          .where(eq(workersTable.id, updated.workerId));
+          .where(and(eq(workersTable.orgId, orgId), eq(workersTable.id, updated.workerId)));
 
         // Auto-invoice
-        await autoInvoiceJob(updated.jobId).catch((err) =>
+        await autoInvoiceJob(orgId, updated.jobId).catch((err) =>
           logger.warn({ err, jobId: updated.jobId }, "Auto-invoice failed")
         );
       }

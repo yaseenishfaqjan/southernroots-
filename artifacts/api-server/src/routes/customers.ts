@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { z } from "zod";
 import {
   db,
@@ -9,6 +9,7 @@ import {
   quotesTable,
 } from "@workspace/db";
 import { getAgentQueue } from "../queues";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -49,11 +50,13 @@ function formatCustomer(row: typeof customersTable.$inferSelect) {
 }
 
 // GET /customers
-router.get("/customers", async (_req, res): Promise<void> => {
+router.get("/customers", async (req, res): Promise<void> => {
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const rows = await db
       .select()
       .from(customersTable)
+      .where(eq(customersTable.orgId, orgId))
       .orderBy(desc(customersTable.createdAt));
     res.json(rows.map(formatCustomer));
   } catch (err) {
@@ -71,9 +74,11 @@ router.post("/customers", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [customer] = await db
       .insert(customersTable)
       .values({
+        orgId,
         name: parsed.data.name,
         phone: parsed.data.phone,
         email: parsed.data.email ?? null,
@@ -97,10 +102,11 @@ router.get("/customers/:id", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [customer] = await db
       .select()
       .from(customersTable)
-      .where(eq(customersTable.id, params.data.id));
+      .where(and(eq(customersTable.orgId, orgId), eq(customersTable.id, params.data.id)));
 
     if (!customer) {
       res.status(404).json({ error: "Customer not found" });
@@ -110,13 +116,13 @@ router.get("/customers/:id", async (req, res): Promise<void> => {
     const jobs = await db
       .select()
       .from(jobsTable)
-      .where(eq(jobsTable.customerId, params.data.id))
+      .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.customerId, params.data.id)))
       .orderBy(desc(jobsTable.createdAt));
 
     const invoices = await db
       .select()
       .from(invoicesTable)
-      .where(eq(invoicesTable.customerId, params.data.id))
+      .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.customerId, params.data.id)))
       .orderBy(desc(invoicesTable.createdAt));
 
     res.json({
@@ -158,10 +164,11 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [updated] = await db
       .update(customersTable)
       .set(parsed.data)
-      .where(eq(customersTable.id, params.data.id))
+      .where(and(eq(customersTable.orgId, orgId), eq(customersTable.id, params.data.id)))
       .returning();
 
     if (!updated) {
@@ -176,7 +183,7 @@ router.patch("/customers/:id", async (req, res): Promise<void> => {
   }
 });
 
-// POST /api/leads — create customer + enqueue ai-quote job
+// POST /api/leads — create customer + enqueue ai-quote job (tenant-scoped)
 router.post("/leads", async (req, res): Promise<void> => {
   const parsed = CreateLeadBody.safeParse(req.body);
   if (!parsed.success) {
@@ -185,9 +192,11 @@ router.post("/leads", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const [customer] = await db
       .insert(customersTable)
       .values({
+        orgId,
         name: parsed.data.name,
         phone: parsed.data.phone,
         email: parsed.data.email ?? null,
@@ -199,6 +208,7 @@ router.post("/leads", async (req, res): Promise<void> => {
     const [quote] = await db
       .insert(quotesTable)
       .values({
+        orgId,
         customerId: customer.id,
         services: parsed.data.servicesWanted ?? [],
         totalCents: 0,
@@ -208,12 +218,13 @@ router.post("/leads", async (req, res): Promise<void> => {
 
     await getAgentQueue().add("ai-quote", {
       type: "ai-quote",
+      orgId,
       customerId: customer.id,
       quoteId: quote.id,
     });
 
     logger.info(
-      { customerId: customer.id, quoteId: quote.id },
+      { orgId, customerId: customer.id, quoteId: quote.id },
       "Lead created, ai-quote job enqueued"
     );
 

@@ -11,17 +11,17 @@ import { sendSms } from "../lib/twilio";
 import { sendEmail } from "../lib/resend";
 import { logger } from "../lib/logger";
 
-export async function autoInvoiceJob(jobId: number): Promise<void> {
+export async function autoInvoiceJob(orgId: number, jobId: number): Promise<void> {
   const [job] = await db
     .select()
     .from(jobsTable)
-    .where(eq(jobsTable.id, jobId));
+    .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, jobId)));
   if (!job) return;
 
   const [customer] = await db
     .select()
     .from(customersTable)
-    .where(eq(customersTable.id, job.customerId));
+    .where(and(eq(customersTable.orgId, orgId), eq(customersTable.id, job.customerId)));
   if (!customer) return;
 
   logger.info({ jobId, customerId: job.customerId }, "Auto-invoicing job");
@@ -59,6 +59,7 @@ export async function autoInvoiceJob(jobId: number): Promise<void> {
   const [invoice] = await db
     .insert(invoicesTable)
     .values({
+      orgId,
       customerId: job.customerId,
       jobId,
       stripeInvoiceId,
@@ -87,7 +88,7 @@ export async function autoInvoiceJob(jobId: number): Promise<void> {
   }
 }
 
-export async function runPaymentReminders(): Promise<void> {
+export async function runPaymentReminders(orgId: number): Promise<void> {
   logger.info("Running payment reminders");
   const now = new Date();
 
@@ -99,7 +100,11 @@ export async function runPaymentReminders(): Promise<void> {
     .from(invoicesTable)
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(
-      and(eq(invoicesTable.status, "sent"), lte(invoicesTable.dueDate, now))
+      and(
+        eq(invoicesTable.orgId, orgId),
+        eq(invoicesTable.status, "sent"),
+        lte(invoicesTable.dueDate, now)
+      )
     );
 
   let reminded = 0;
@@ -118,11 +123,11 @@ export async function runPaymentReminders(): Promise<void> {
       await db
         .update(customersTable)
         .set({ tier: "suspended" })
-        .where(eq(customersTable.id, customer.id));
+        .where(and(eq(customersTable.orgId, orgId), eq(customersTable.id, customer.id)));
       await db
         .update(invoicesTable)
         .set({ status: "overdue" })
-        .where(eq(invoicesTable.id, invoice.id));
+        .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.id, invoice.id)));
     } else if (daysPastDue >= 7 && reminderCount < 2) {
       sms = `Reminder: Invoice #${invoice.id} for ${amount} is 7 days past due. A 5% late fee may apply. Pay: ${invoice.stripePaymentLinkUrl ?? "southernrootsturf.com"}`;
     } else if (daysPastDue >= 1 && reminderCount < 1) {
@@ -137,12 +142,13 @@ export async function runPaymentReminders(): Promise<void> {
           reminderCount: reminderCount + 1,
           lastReminderAt: new Date(),
         })
-        .where(eq(invoicesTable.id, invoice.id));
+        .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.id, invoice.id)));
       reminded++;
     }
   }
 
   await db.insert(aiDecisionsTable).values({
+    orgId,
     agent: "billing",
     input: { overdueCount: overdue.length },
     output: { reminded },

@@ -16,7 +16,7 @@ interface DispatchAssignment {
   reasoning: string;
 }
 
-export async function runDailyDispatch(): Promise<void> {
+export async function runDailyDispatch(orgId: number): Promise<void> {
   logger.info("Running daily dispatch agent");
 
   const today = new Date();
@@ -30,6 +30,7 @@ export async function runDailyDispatch(): Promise<void> {
     .from(jobsTable)
     .where(
       and(
+        eq(jobsTable.orgId, orgId),
         eq(jobsTable.status, "new"),
         gte(jobsTable.scheduledDate, today),
         lte(jobsTable.scheduledDate, tomorrow)
@@ -45,7 +46,7 @@ export async function runDailyDispatch(): Promise<void> {
   const workers = await db
     .select()
     .from(workersTable)
-    .where(eq(workersTable.isActive, true));
+    .where(and(eq(workersTable.orgId, orgId), eq(workersTable.isActive, true)));
 
   if (workers.length === 0) {
     logger.warn("No active workers for dispatch");
@@ -89,12 +90,12 @@ Return JSON: { "assignments": [{ "jobId": number, "workerId": number, "reasoning
   for (const a of assignments) {
     await db
       .insert(assignmentsTable)
-      .values({ jobId: a.jobId, workerId: a.workerId })
+      .values({ orgId, jobId: a.jobId, workerId: a.workerId })
       .catch(() => {});
     await db
       .update(jobsTable)
       .set({ status: "assigned" })
-      .where(eq(jobsTable.id, a.jobId));
+      .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, a.jobId)));
   }
 
   // Group by worker and send SMS
@@ -114,6 +115,7 @@ Return JSON: { "assignments": [{ "jobId": number, "workerId": number, "reasoning
   }
 
   await db.insert(aiDecisionsTable).values({
+    orgId,
     agent: "dispatch",
     input: {
       jobCount: unassignedJobs.length,

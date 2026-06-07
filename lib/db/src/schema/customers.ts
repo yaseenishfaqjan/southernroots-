@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const customersTable = pgTable("customers", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone").notNull(),
@@ -16,7 +17,7 @@ export const customersTable = pgTable("customers", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertCustomerSchema = createInsertSchema(customersTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertCustomerSchema = createInsertSchema(customersTable).omit({ id: true, orgId: true, createdAt: true, updatedAt: true });
 export const selectCustomerSchema = createSelectSchema(customersTable);
 export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customersTable.$inferSelect;

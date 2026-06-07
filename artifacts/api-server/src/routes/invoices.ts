@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, invoicesTable, jobsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -55,10 +56,11 @@ router.get("/invoices/job/:jobId", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const orgId = getOrgId(req as AuthedRequest);
   const [invoice] = await db
     .select()
     .from(invoicesTable)
-    .where(eq(invoicesTable.jobId, params.data.jobId))
+    .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.jobId, params.data.jobId)))
     .limit(1);
 
   if (!invoice) {
@@ -74,10 +76,11 @@ router.get("/invoices/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const orgId = getOrgId(req as AuthedRequest);
   const [invoice] = await db
     .select()
     .from(invoicesTable)
-    .where(eq(invoicesTable.id, params.data.id))
+    .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.id, params.data.id)))
     .limit(1);
 
   if (!invoice) {
@@ -94,6 +97,7 @@ router.post("/invoices", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const { jobId, customerName, customerPhone, serviceType, lineItems, subtotal, tax, total, notes } = parsed.data;
 
   const invoiceNumber = `INV-${new Date().getFullYear()}-${String(jobId).padStart(4, "0")}-${Date.now().toString().slice(-4)}`;
@@ -101,6 +105,7 @@ router.post("/invoices", async (req, res): Promise<void> => {
   const [invoice] = await db
     .insert(invoicesTable)
     .values({
+      orgId,
       jobId,
       invoiceNumber,
       customerName,
@@ -131,21 +136,22 @@ router.patch("/invoices/:id/status", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const updateData: Record<string, unknown> = { status: parsed.data.status };
   if (parsed.data.status === "sent") {
     updateData.sentAt = new Date();
   } else if (parsed.data.status === "paid") {
     updateData.paidAt = new Date();
-    const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, params.data.id));
+    const [inv] = await db.select().from(invoicesTable).where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.id, params.data.id)));
     if (inv) {
-      await db.update(jobsTable).set({ status: "paid" }).where(eq(jobsTable.id, inv.jobId));
+      await db.update(jobsTable).set({ status: "paid" }).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, inv.jobId)));
     }
   }
 
   const [updated] = await db
     .update(invoicesTable)
     .set(updateData as Parameters<typeof db.update>[0] extends infer T ? T : never)
-    .where(eq(invoicesTable.id, params.data.id))
+    .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.id, params.data.id)))
     .returning();
 
   if (!updated) {

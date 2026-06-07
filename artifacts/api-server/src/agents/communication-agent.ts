@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   db,
   customersTable,
@@ -45,8 +45,16 @@ export async function handleInboundSms(
     .from(customersTable)
     .where(eq(customersTable.phone, phone));
 
+  if (!customer) {
+    logger.info({ from }, "Inbound SMS from unknown customer — ignoring");
+    return;
+  }
+
+  const orgId = customer.orgId;
+
   // Log inbound
   await db.insert(conversationsTable).values({
+    orgId,
     customerPhone: phone,
     direction: "inbound",
     message: body,
@@ -54,21 +62,17 @@ export async function handleInboundSms(
   });
 
   // Load context
-  const jobs = customer
-    ? await db
-        .select()
-        .from(jobsTable)
-        .where(eq(jobsTable.customerId, customer.id))
-        .limit(5)
-    : [];
+  const jobs = await db
+    .select()
+    .from(jobsTable)
+    .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.customerId, customer.id)))
+    .limit(5);
 
-  const invoices = customer
-    ? await db
-        .select()
-        .from(invoicesTable)
-        .where(eq(invoicesTable.customerId, customer.id))
-        .limit(3)
-    : [];
+  const invoices = await db
+    .select()
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.customerId, customer.id)))
+    .limit(3);
 
   const history = await getHistory(phone);
   history.push({ role: "user", content: body });
@@ -120,20 +124,17 @@ Rules:
           await db
             .update(jobsTable)
             .set({ scheduledDate: new Date(action.newDate) })
-            .where(eq(jobsTable.id, action.jobId));
+            .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, action.jobId)));
           actionExecuted = true;
         } else if (action.type === "cancel" && action.jobId) {
           await db
             .update(jobsTable)
             .set({ status: "cancelled" })
-            .where(eq(jobsTable.id, action.jobId));
+            .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, action.jobId)));
           actionExecuted = true;
-        } else if (
-          action.type === "escalate" &&
-          action.reason &&
-          customer
-        ) {
+        } else if (action.type === "escalate" && action.reason) {
           await db.insert(escalationsTable).values({
+            orgId,
             customerId: customer.id,
             reason: action.reason,
           });
@@ -160,6 +161,7 @@ Rules:
   );
 
   await db.insert(conversationsTable).values({
+    orgId,
     customerPhone: phone,
     direction: "outbound",
     message: reply,
@@ -167,6 +169,7 @@ Rules:
   });
 
   await db.insert(aiDecisionsTable).values({
+    orgId,
     agent: "communication",
     input: { from, body },
     output: { reply, actionExecuted },

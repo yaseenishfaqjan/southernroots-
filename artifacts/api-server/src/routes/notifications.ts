@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { db, notificationsTable } from "@workspace/db";
 import { z } from "zod";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -14,10 +15,12 @@ function formatNotification(n: typeof notificationsTable.$inferSelect) {
   };
 }
 
-router.get("/notifications", async (_req, res): Promise<void> => {
+router.get("/notifications", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   const rows = await db
     .select()
     .from(notificationsTable)
+    .where(eq(notificationsTable.orgId, orgId))
     .orderBy(desc(notificationsTable.createdAt))
     .limit(50);
   res.json(rows.map(formatNotification));
@@ -30,10 +33,11 @@ router.patch("/notifications/:id/read", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const [updated] = await db
     .update(notificationsTable)
     .set({ read: true })
-    .where(eq(notificationsTable.id, params.data.id))
+    .where(and(eq(notificationsTable.orgId, orgId), eq(notificationsTable.id, params.data.id)))
     .returning();
 
   if (!updated) {
@@ -44,11 +48,12 @@ router.patch("/notifications/:id/read", async (req, res): Promise<void> => {
   res.json(formatNotification(updated));
 });
 
-router.patch("/notifications/read-all", async (_req, res): Promise<void> => {
+router.patch("/notifications/read-all", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   const result = await db
     .update(notificationsTable)
     .set({ read: true })
-    .where(eq(notificationsTable.read, false))
+    .where(and(eq(notificationsTable.orgId, orgId), eq(notificationsTable.read, false)))
     .returning({ id: notificationsTable.id });
 
   res.json({ updated: result.length });

@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { sql, count } from "drizzle-orm";
+import { and, eq, sql, count } from "drizzle-orm";
 import { db, kpiLogsTable } from "@workspace/db";
 import { z } from "zod";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -11,7 +12,8 @@ const LogKpiBody = z.object({
   notes: z.string().nullable().optional(),
 });
 
-router.get("/kpi/summary", async (_req, res): Promise<void> => {
+router.get("/kpi/summary", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
@@ -23,7 +25,7 @@ router.get("/kpi/summary", async (_req, res): Promise<void> => {
       quotesToday: sql<number>`count(*) filter (where ${kpiLogsTable.metricType} = 'quote_sent')`,
     })
     .from(kpiLogsTable)
-    .where(sql`${kpiLogsTable.createdAt} >= ${todayStart}`);
+    .where(and(eq(kpiLogsTable.orgId, orgId), sql`${kpiLogsTable.createdAt} >= ${todayStart}`));
 
   const [overallCounts] = await db
     .select({
@@ -32,7 +34,8 @@ router.get("/kpi/summary", async (_req, res): Promise<void> => {
       jobsClosed: sql<number>`count(*) filter (where ${kpiLogsTable.metricType} = 'job_closed')`,
       quotes: sql<number>`count(*) filter (where ${kpiLogsTable.metricType} = 'quote_sent')`,
     })
-    .from(kpiLogsTable);
+    .from(kpiLogsTable)
+    .where(eq(kpiLogsTable.orgId, orgId));
 
   res.json({
     today: {
@@ -57,9 +60,11 @@ router.post("/kpi/log", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const [entry] = await db
     .insert(kpiLogsTable)
     .values({
+      orgId,
       metricType: parsed.data.metricType,
       jobId: parsed.data.jobId ?? null,
       notes: parsed.data.notes ?? null,

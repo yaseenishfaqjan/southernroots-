@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import { desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { z } from "zod";
 import { db, aiDecisionsTable } from "@workspace/db";
 import { runDailyDispatch } from "../agents/dispatch-agent";
 import { sendOwnerBriefing } from "../agents/briefing-agent";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -23,6 +24,7 @@ router.get("/ai/decisions", async (req, res): Promise<void> => {
   }
 
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     const { page, limit } = query.data;
     const offset = (page - 1) * limit;
 
@@ -30,6 +32,7 @@ router.get("/ai/decisions", async (req, res): Promise<void> => {
       .select()
       .from(aiDecisionsTable)
       .$dynamic()
+      .where(eq(aiDecisionsTable.orgId, orgId))
       .orderBy(desc(aiDecisionsTable.executedAt))
       .limit(limit)
       .offset(offset);
@@ -51,10 +54,11 @@ router.get("/ai/decisions", async (req, res): Promise<void> => {
 });
 
 // POST /agents/dispatch/trigger — manual dispatch trigger
-router.post("/agents/dispatch/trigger", async (_req, res): Promise<void> => {
+router.post("/agents/dispatch/trigger", async (req, res): Promise<void> => {
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     logger.info("Manual dispatch trigger");
-    await runDailyDispatch();
+    await runDailyDispatch(orgId);
     res.json({ success: true, message: "Dispatch agent executed" });
   } catch (err) {
     logger.error({ err }, "Manual dispatch trigger failed");
@@ -63,10 +67,11 @@ router.post("/agents/dispatch/trigger", async (_req, res): Promise<void> => {
 });
 
 // POST /agents/briefing/trigger — manual briefing trigger
-router.post("/agents/briefing/trigger", async (_req, res): Promise<void> => {
+router.post("/agents/briefing/trigger", async (req, res): Promise<void> => {
   try {
+    const orgId = getOrgId(req as AuthedRequest);
     logger.info("Manual briefing trigger");
-    await sendOwnerBriefing();
+    await sendOwnerBriefing(orgId);
     res.json({ success: true, message: "Briefing agent executed" });
   } catch (err) {
     logger.error({ err }, "Manual briefing trigger failed");

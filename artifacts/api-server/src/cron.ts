@@ -1,4 +1,6 @@
 import cron from "node-cron";
+import { eq } from "drizzle-orm";
+import { db, organizationsTable } from "@workspace/db";
 import { runDailyDispatch } from "./agents/dispatch-agent";
 import { sendOwnerBriefing } from "./agents/briefing-agent";
 import { runPaymentReminders } from "./agents/billing-agent";
@@ -6,15 +8,25 @@ import { runUpsellScan } from "./agents/upsell-agent";
 import { runChurnPrevention } from "./agents/churn-agent";
 import { logger } from "./lib/logger";
 
+async function activeOrgIds(): Promise<{ id: number }[]> {
+  return db
+    .select({ id: organizationsTable.id })
+    .from(organizationsTable)
+    .where(eq(organizationsTable.status, "active"));
+}
+
 export function startCronJobs(): void {
   // 6 AM ET — assign today's jobs to workers
   cron.schedule(
     "0 6 * * *",
     async () => {
       logger.info("CRON: daily dispatch");
-      await runDailyDispatch().catch((err) =>
-        logger.error({ err }, "Dispatch cron failed")
-      );
+      const orgs = await activeOrgIds();
+      for (const o of orgs) {
+        await runDailyDispatch(o.id).catch((err) =>
+          logger.error({ err, orgId: o.id }, "Dispatch cron failed")
+        );
+      }
     },
     { timezone: "America/New_York" }
   );
@@ -24,9 +36,12 @@ export function startCronJobs(): void {
     "0 7 * * *",
     async () => {
       logger.info("CRON: owner briefing");
-      await sendOwnerBriefing().catch((err) =>
-        logger.error({ err }, "Briefing cron failed")
-      );
+      const orgs = await activeOrgIds();
+      for (const o of orgs) {
+        await sendOwnerBriefing(o.id).catch((err) =>
+          logger.error({ err, orgId: o.id }, "Briefing cron failed")
+        );
+      }
     },
     { timezone: "America/New_York" }
   );
@@ -36,9 +51,12 @@ export function startCronJobs(): void {
     "0 9 * * *",
     async () => {
       logger.info("CRON: payment reminders");
-      await runPaymentReminders().catch((err) =>
-        logger.error({ err }, "Payment reminder cron failed")
-      );
+      const orgs = await activeOrgIds();
+      for (const o of orgs) {
+        await runPaymentReminders(o.id).catch((err) =>
+          logger.error({ err, orgId: o.id }, "Payment reminder cron failed")
+        );
+      }
     },
     { timezone: "America/New_York" }
   );
@@ -48,9 +66,12 @@ export function startCronJobs(): void {
     "0 8 * * 0",
     async () => {
       logger.info("CRON: upsell scan");
-      await runUpsellScan().catch((err) =>
-        logger.error({ err }, "Upsell cron failed")
-      );
+      const orgs = await activeOrgIds();
+      for (const o of orgs) {
+        await runUpsellScan(o.id).catch((err) =>
+          logger.error({ err, orgId: o.id }, "Upsell cron failed")
+        );
+      }
     },
     { timezone: "America/New_York" }
   );
@@ -60,9 +81,12 @@ export function startCronJobs(): void {
     "0 8 * * 1",
     async () => {
       logger.info("CRON: churn prevention");
-      await runChurnPrevention().catch((err) =>
-        logger.error({ err }, "Churn cron failed")
-      );
+      const orgs = await activeOrgIds();
+      for (const o of orgs) {
+        await runChurnPrevention(o.id).catch((err) =>
+          logger.error({ err, orgId: o.id }, "Churn cron failed")
+        );
+      }
     },
     { timezone: "America/New_York" }
   );

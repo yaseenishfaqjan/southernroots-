@@ -4,6 +4,7 @@ import { z } from "zod";
 
 export const kpiSnapshotsTable = pgTable("kpi_snapshots", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
   date: timestamp("date", { withTimezone: true }).notNull(),
   totalRevenueCents: integer("total_revenue_cents").notNull().default(0),
   jobsCompleted: integer("jobs_completed").notNull().default(0),
@@ -14,6 +15,6 @@ export const kpiSnapshotsTable = pgTable("kpi_snapshots", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const insertKpiSnapshotSchema = createInsertSchema(kpiSnapshotsTable).omit({ id: true, createdAt: true });
+export const insertKpiSnapshotSchema = createInsertSchema(kpiSnapshotsTable).omit({ id: true, orgId: true, createdAt: true });
 export type InsertKpiSnapshot = z.infer<typeof insertKpiSnapshotSchema>;
 export type KpiSnapshot = typeof kpiSnapshotsTable.$inferSelect;

@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { db, auditLogsTable } from "@workspace/db";
 import { z } from "zod";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
@@ -18,15 +19,18 @@ router.get("/audit-logs", async (req, res): Promise<void> => {
     return;
   }
 
-  let query = db.select().from(auditLogsTable).$dynamic();
+  const orgId = getOrgId(req as AuthedRequest);
+  const conditions = [eq(auditLogsTable.orgId, orgId)];
 
   if (parsed.data.entityType) {
-    query = query.where(eq(auditLogsTable.entityType, parsed.data.entityType));
+    conditions.push(eq(auditLogsTable.entityType, parsed.data.entityType));
   }
 
   if (parsed.data.entityId != null) {
-    query = query.where(eq(auditLogsTable.entityId, parsed.data.entityId));
+    conditions.push(eq(auditLogsTable.entityId, parsed.data.entityId));
   }
+
+  let query = db.select().from(auditLogsTable).$dynamic().where(and(...conditions));
 
   query = query.orderBy(desc(auditLogsTable.createdAt));
 

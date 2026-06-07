@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, and, sql } from "drizzle-orm";
 import { db, jobsTable, assignmentsTable, subcontractorsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -60,11 +61,13 @@ router.post("/client/lookup", async (req, res): Promise<void> => {
   // Normalize phone: strip all non-digits for comparison so (678) 555-0114, 6785550114, 678-555-0114 all match
   const digitsOnly = parsed.data.phone.replace(/\D/g, "");
 
+  const orgId = getOrgId(req as AuthedRequest);
   const [job] = await db
     .select()
     .from(jobsTable)
     .where(
       and(
+        eq(jobsTable.orgId, orgId),
         eq(jobsTable.id, parsed.data.jobId),
         sql`regexp_replace(${jobsTable.phone}, '[^0-9]', '', 'g') = ${digitsOnly}`
       )
@@ -89,7 +92,7 @@ router.post("/client/lookup", async (req, res): Promise<void> => {
     })
     .from(assignmentsTable)
     .leftJoin(subcontractorsTable, eq(assignmentsTable.subcontractorId, subcontractorsTable.id))
-    .where(eq(assignmentsTable.jobId, job.id));
+    .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.jobId, job.id)));
 
   res.json(formatJob(job, assignmentRow ?? null));
 });
@@ -101,9 +104,11 @@ router.post("/client/request", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const [job] = await db
     .insert(jobsTable)
     .values({
+      orgId,
       ...parsed.data,
       customerPrice: parsed.data.customerPrice != null ? String(parsed.data.customerPrice) : null,
     })

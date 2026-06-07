@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { db, escalationsTable, jobsTable, notificationsTable, auditLogsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -27,9 +28,12 @@ function formatEscalation(e: typeof escalationsTable.$inferSelect) {
 }
 
 router.get("/escalations", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
   let query = db.select().from(escalationsTable).$dynamic();
   if (req.query.status) {
-    query = query.where(eq(escalationsTable.status, req.query.status as string));
+    query = query.where(and(eq(escalationsTable.orgId, orgId), eq(escalationsTable.status, req.query.status as string)));
+  } else {
+    query = query.where(eq(escalationsTable.orgId, orgId));
   }
   const rows = await query.orderBy(desc(escalationsTable.createdAt));
   res.json(rows.map(formatEscalation));
@@ -42,15 +46,17 @@ router.post("/escalations", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   let customerName: string | null = null;
   if (parsed.data.jobId) {
-    const [job] = await db.select().from(jobsTable).where(eq(jobsTable.id, parsed.data.jobId));
+    const [job] = await db.select().from(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, parsed.data.jobId)));
     if (job) customerName = job.customerName;
   }
 
   const [row] = await db
     .insert(escalationsTable)
     .values({
+      orgId,
       jobId: parsed.data.jobId ?? null,
       category: parsed.data.category,
       description: parsed.data.description,
@@ -59,6 +65,7 @@ router.post("/escalations", async (req, res): Promise<void> => {
     .returning();
 
   await db.insert(notificationsTable).values({
+    orgId,
     type: "escalation",
     title: "Escalation Needs Admin Review",
     body: `${parsed.data.category}: ${parsed.data.description.substring(0, 80)}`,
@@ -67,6 +74,7 @@ router.post("/escalations", async (req, res): Promise<void> => {
   });
 
   await db.insert(auditLogsTable).values({
+    orgId,
     actionType: "escalation_created",
     entityType: "escalation",
     entityId: row.id,
@@ -89,6 +97,7 @@ router.patch("/escalations/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const updateData: Record<string, unknown> = {};
   if (parsed.data.status != null) updateData.status = parsed.data.status;
   if ("resolution" in parsed.data) updateData.resolution = parsed.data.resolution;
@@ -96,7 +105,7 @@ router.patch("/escalations/:id", async (req, res): Promise<void> => {
   const [updated] = await db
     .update(escalationsTable)
     .set(updateData as Parameters<typeof db.update>[0] extends infer T ? T : never)
-    .where(eq(escalationsTable.id, params.data.id))
+    .where(and(eq(escalationsTable.orgId, orgId), eq(escalationsTable.id, params.data.id)))
     .returning();
 
   if (!updated) {
@@ -105,6 +114,7 @@ router.patch("/escalations/:id", async (req, res): Promise<void> => {
   }
 
   await db.insert(auditLogsTable).values({
+    orgId,
     actionType: "escalation_updated",
     entityType: "escalation",
     entityId: params.data.id,

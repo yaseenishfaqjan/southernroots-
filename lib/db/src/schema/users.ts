@@ -6,6 +6,7 @@ import { z } from "zod";
 // Customers are NOT users; they authenticate via the client portal magic-link flow.
 export const usersTable = pgTable("users", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
@@ -15,7 +16,7 @@ export const usersTable = pgTable("users", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertUserSchema = createInsertSchema(usersTable).omit({ id: true, orgId: true, createdAt: true, updatedAt: true });
 export const selectUserSchema = createSelectSchema(usersTable);
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof usersTable.$inferSelect;

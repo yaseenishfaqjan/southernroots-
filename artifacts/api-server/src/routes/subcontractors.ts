@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, subcontractorsTable } from "@workspace/db";
+import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import {
   CreateSubcontractorBody,
   GetSubcontractorParams,
@@ -11,8 +12,12 @@ import {
 
 const router: IRouter = Router();
 
-router.get("/subcontractors", async (_req, res): Promise<void> => {
-  const subs = await db.select().from(subcontractorsTable);
+router.get("/subcontractors", async (req, res): Promise<void> => {
+  const orgId = getOrgId(req as AuthedRequest);
+  const subs = await db
+    .select()
+    .from(subcontractorsTable)
+    .where(eq(subcontractorsTable.orgId, orgId));
   res.json(
     subs.map((s) => ({
       ...s,
@@ -28,7 +33,11 @@ router.post("/subcontractors", async (req, res): Promise<void> => {
     return;
   }
 
-  const [sub] = await db.insert(subcontractorsTable).values(parsed.data).returning();
+  const orgId = getOrgId(req as AuthedRequest);
+  const [sub] = await db
+    .insert(subcontractorsTable)
+    .values({ orgId, ...parsed.data })
+    .returning();
   res.status(201).json({ ...sub, createdAt: sub.createdAt.toISOString() });
 });
 
@@ -39,10 +48,11 @@ router.get("/subcontractors/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const [sub] = await db
     .select()
     .from(subcontractorsTable)
-    .where(eq(subcontractorsTable.id, params.data.id));
+    .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, params.data.id)));
 
   if (!sub) {
     res.status(404).json({ error: "Subcontractor not found" });
@@ -65,10 +75,11 @@ router.patch("/subcontractors/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const [updated] = await db
     .update(subcontractorsTable)
     .set(parsed.data)
-    .where(eq(subcontractorsTable.id, params.data.id))
+    .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, params.data.id)))
     .returning();
 
   if (!updated) {
@@ -86,9 +97,10 @@ router.delete("/subcontractors/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const orgId = getOrgId(req as AuthedRequest);
   const [deleted] = await db
     .delete(subcontractorsTable)
-    .where(eq(subcontractorsTable.id, params.data.id))
+    .where(and(eq(subcontractorsTable.orgId, orgId), eq(subcontractorsTable.id, params.data.id)))
     .returning();
 
   if (!deleted) {
