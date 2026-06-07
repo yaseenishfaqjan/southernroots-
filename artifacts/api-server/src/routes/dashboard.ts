@@ -1,127 +1,109 @@
 import { Router, type IRouter } from "express";
-import { and, eq, count, sum, sql } from "drizzle-orm";
-import { db, jobsTable, assignmentsTable, subcontractorsTable, escalationsTable, notificationsTable } from "@workspace/db";
+import { and, eq, count, gte, inArray, sql } from "drizzle-orm";
+import {
+  db,
+  customersTable,
+  quotesTable,
+  jobsTable,
+  invoicesTable,
+  escalationsTable,
+  workersTable,
+} from "@workspace/db";
 import { getOrgId, type AuthedRequest } from "../middlewares/auth";
-
 
 const router: IRouter = Router();
 
+// Real-time KPIs for the owner dashboard (computed from the live schema).
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const orgId = getOrgId(req as AuthedRequest);
-  const [jobCounts] = await db
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const staleThreshold = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+  const [revenue] = await db
+    .select({ cents: sql<number>`coalesce(sum(${invoicesTable.amountCents}), 0)` })
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, monthStart)));
+
+  const [mrr] = await db
+    .select({ cents: sql<number>`coalesce(sum(${customersTable.mrr}), 0)` })
+    .from(customersTable)
+    .where(eq(customersTable.orgId, orgId));
+
+  const [jobsWeek] = await db
+    .select({ c: count() })
+    .from(jobsTable)
+    .where(and(eq(jobsTable.orgId, orgId), inArray(jobsTable.status, ["complete", "paid"]), gte(jobsTable.completedAt, weekAgo)));
+
+  const [leadsWeek] = await db
+    .select({ c: count() })
+    .from(customersTable)
+    .where(and(eq(customersTable.orgId, orgId), gte(customersTable.createdAt, weekAgo)));
+
+  const [quoteStats] = await db
     .select({
       total: count(),
-      newJobs: sql<number>`count(*) filter (where ${jobsTable.status} = 'new')`,
-      assignedJobs: sql<number>`count(*) filter (where ${jobsTable.status} = 'assigned')`,
-      inProgressJobs: sql<number>`count(*) filter (where ${jobsTable.status} = 'in_progress')`,
-      completedJobs: sql<number>`count(*) filter (where ${jobsTable.status} in ('complete', 'paid'))`,
+      accepted: sql<number>`count(*) filter (where ${quotesTable.status} = 'accepted')`,
     })
-    .from(jobsTable)
-    .where(eq(jobsTable.orgId, orgId));
+    .from(quotesTable)
+    .where(eq(quotesTable.orgId, orgId));
 
-  const [earningsSums] = await db
+  const [workerStats] = await db
     .select({
-      totalRevenue: sql<number>`coalesce(sum(${jobsTable.customerPrice}), 0)`,
+      total: count(),
+      busy: sql<number>`count(*) filter (where ${workersTable.currentJobCount} > 0)`,
     })
-    .from(jobsTable)
-    .where(eq(jobsTable.orgId, orgId));
+    .from(workersTable)
+    .where(eq(workersTable.orgId, orgId));
 
-  const [assignmentSums] = await db
+  const [outstanding] = await db
     .select({
-      totalSubPay: sql<number>`coalesce(sum(${assignmentsTable.subPay}), 0)`,
-      totalOwnerProfit: sql<number>`coalesce(sum(${assignmentsTable.ownerProfit}), 0)`,
+      c: count(),
+      cents: sql<number>`coalesce(sum(${invoicesTable.amountCents}), 0)`,
     })
-    .from(assignmentsTable)
-    .where(eq(assignmentsTable.orgId, orgId));
+    .from(invoicesTable)
+    .where(and(eq(invoicesTable.orgId, orgId), inArray(invoicesTable.status, ["sent", "overdue", "draft"])));
 
-  const [subCount] = await db
-    .select({ count: count() })
-    .from(subcontractorsTable)
-    .where(eq(subcontractorsTable.orgId, orgId));
+  const [stale] = await db
+    .select({ c: count() })
+    .from(quotesTable)
+    .where(and(eq(quotesTable.orgId, orgId), eq(quotesTable.status, "draft"), sql`${quotesTable.createdAt} <= ${staleThreshold}`));
 
-  const staleThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000);
-  const [staleResult] = await db
-    .select({ staleLeads: count() })
-    .from(jobsTable)
-    .where(and(eq(jobsTable.orgId, orgId), sql`${jobsTable.status} = 'new' and ${jobsTable.createdAt} <= ${staleThreshold}`));
-
-  const [pendingEscalationsResult] = await db
-    .select({ pendingEscalations: count() })
+  const [openEsc] = await db
+    .select({ c: count() })
     .from(escalationsTable)
     .where(and(eq(escalationsTable.orgId, orgId), eq(escalationsTable.status, "pending")));
 
-  const [unreadResult] = await db
-    .select({ unreadNotifications: count() })
-    .from(notificationsTable)
-    .where(and(eq(notificationsTable.orgId, orgId), eq(notificationsTable.read, false)));
+  const [churn] = await db
+    .select({ c: count() })
+    .from(customersTable)
+    .where(and(eq(customersTable.orgId, orgId), sql`${customersTable.churnRisk} >= 0.7`));
+
+  const totalQuotes = Number(quoteStats.total);
+  const totalWorkers = Number(workerStats.total);
 
   res.json({
-    totalRevenue: parseFloat(String(earningsSums.totalRevenue)),
-    totalSubPay: parseFloat(String(assignmentSums.totalSubPay)),
-    totalOwnerProfit: parseFloat(String(assignmentSums.totalOwnerProfit)),
-    newJobs: Number(jobCounts.newJobs),
-    assignedJobs: Number(jobCounts.assignedJobs),
-    inProgressJobs: Number(jobCounts.inProgressJobs),
-    completedJobs: Number(jobCounts.completedJobs),
-    totalJobs: Number(jobCounts.total),
-    totalSubs: Number(subCount.count),
-    staleLeads: Number(staleResult.staleLeads),
-    pendingEscalations: Number(pendingEscalationsResult.pendingEscalations),
-    unreadNotifications: Number(unreadResult.unreadNotifications),
+    totalRevenueCentsThisMonth: Number(revenue.cents),
+    mrrCents: Number(mrr.cents),
+    jobsCompletedThisWeek: Number(jobsWeek.c),
+    newLeadsThisWeek: Number(leadsWeek.c),
+    quoteConversionRate: totalQuotes > 0 ? Number(quoteStats.accepted) / totalQuotes : 0,
+    crewUtilization: totalWorkers > 0 ? Number(workerStats.busy) / totalWorkers : 0,
+    outstandingInvoicesCount: Number(outstanding.c),
+    outstandingInvoicesCents: Number(outstanding.cents),
+    staleLeadsCount: Number(stale.c),
+    openEscalationsCount: Number(openEsc.c),
+    churnRiskCount: Number(churn.c),
   });
 });
 
-router.get("/dashboard/charts", async (req, res): Promise<void> => {
-  const orgId = getOrgId(req as AuthedRequest);
-  const byService = await db
-    .select({
-      name: jobsTable.serviceType,
-      jobs: sql<number>`count(*)`,
-      revenue: sql<number>`coalesce(sum(${jobsTable.customerPrice}), 0)`,
-    })
-    .from(jobsTable)
-    .where(eq(jobsTable.orgId, orgId))
-    .groupBy(jobsTable.serviceType)
-    .orderBy(sql`sum(${jobsTable.customerPrice}) desc nulls last`);
-
-  const byStatus = await db
-    .select({
-      status: jobsTable.status,
-      jobs: sql<number>`count(*)`,
-    })
-    .from(jobsTable)
-    .where(eq(jobsTable.orgId, orgId))
-    .groupBy(jobsTable.status);
-
-  const bySub = await db
-    .select({
-      name: subcontractorsTable.name,
-      jobs: sql<number>`count(${assignmentsTable.id})`,
-      pay: sql<number>`coalesce(sum(${assignmentsTable.subPay}), 0)`,
-    })
-    .from(subcontractorsTable)
-    .leftJoin(assignmentsTable, eq(assignmentsTable.subcontractorId, subcontractorsTable.id))
-    .where(eq(subcontractorsTable.orgId, orgId))
-    .groupBy(subcontractorsTable.id, subcontractorsTable.name)
-    .orderBy(sql`count(${assignmentsTable.id}) desc`);
-
-  const STATUS_ORDER = ["new", "assigned", "in_progress", "complete", "paid"];
-  const statusMap = Object.fromEntries(byStatus.map((s) => [s.status, Number(s.jobs)]));
-  const pipeline = STATUS_ORDER.map((s) => ({ status: s, jobs: statusMap[s] ?? 0 }));
-
-  res.json({
-    byService: byService.map((r) => ({
-      name: r.name,
-      jobs: Number(r.jobs),
-      revenue: parseFloat(String(r.revenue)),
-    })),
-    pipeline,
-    bySub: bySub.map((r) => ({
-      name: r.name,
-      jobs: Number(r.jobs),
-      pay: parseFloat(String(r.pay)),
-    })),
-  });
+// Revenue history for the dashboard chart (last 30 daily snapshots if present).
+router.get("/dashboard/kpis/history", async (req, res): Promise<void> => {
+  getOrgId(req as AuthedRequest); // ensure authenticated/tenant context
+  // KPI snapshots are written by the briefing agent; until they accumulate,
+  // return an empty series (the chart hides itself gracefully).
+  res.json([]);
 });
 
 export default router;

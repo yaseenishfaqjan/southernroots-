@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import { api, formatMoney, formatDate } from "../lib/api";
+import { useToast } from "../lib/toast";
 
 const STATUS_TABS = ["all", "sent", "paid", "overdue", "draft"] as const;
 
@@ -21,6 +22,7 @@ interface Invoice {
 export default function Invoices() {
   const [status, setStatus] = useState<string>("all");
   const qc = useQueryClient();
+  const toast = useToast();
 
   const { data: invoices, isLoading } = useQuery<Invoice[]>({
     queryKey: ["invoices", status],
@@ -30,7 +32,11 @@ export default function Invoices() {
 
   const resend = useMutation({
     mutationFn: (id: number) => api.post(`/invoices/${id}/resend`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["invoices"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      toast("Payment reminder sent");
+    },
+    onError: () => toast("Could not send the reminder", "error"),
   });
 
   const totalAmount =

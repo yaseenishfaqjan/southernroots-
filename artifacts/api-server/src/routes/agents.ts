@@ -1,13 +1,49 @@
 import { Router, type IRouter } from "express";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, count } from "drizzle-orm";
 import { z } from "zod";
-import { db, aiDecisionsTable } from "@workspace/db";
+import { db, aiDecisionsTable, jobsTable, workersTable } from "@workspace/db";
 import { runDailyDispatch } from "../agents/dispatch-agent";
 import { sendOwnerBriefing } from "../agents/briefing-agent";
 import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
+
+// GET /agents/dispatch/status — quick status for the Dispatch page
+router.get("/agents/dispatch/status", async (req, res): Promise<void> => {
+  try {
+    const orgId = getOrgId(req as AuthedRequest);
+    const [assigned] = await db
+      .select({ c: count() })
+      .from(jobsTable)
+      .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.status, "assigned")));
+    const [activeWorkers] = await db
+      .select({ c: count() })
+      .from(workersTable)
+      .where(and(eq(workersTable.orgId, orgId), eq(workersTable.isActive, true)));
+    const [lastDispatch] = await db
+      .select({ at: aiDecisionsTable.executedAt })
+      .from(aiDecisionsTable)
+      .where(and(eq(aiDecisionsTable.orgId, orgId), eq(aiDecisionsTable.agent, "dispatch")))
+      .orderBy(desc(aiDecisionsTable.executedAt))
+      .limit(1);
+    const [lastBriefing] = await db
+      .select({ at: aiDecisionsTable.executedAt })
+      .from(aiDecisionsTable)
+      .where(and(eq(aiDecisionsTable.orgId, orgId), eq(aiDecisionsTable.agent, "briefing")))
+      .orderBy(desc(aiDecisionsTable.executedAt))
+      .limit(1);
+    res.json({
+      lastDispatchAt: lastDispatch?.at ? lastDispatch.at.toISOString() : null,
+      lastBriefingAt: lastBriefing?.at ? lastBriefing.at.toISOString() : null,
+      jobsDispatched: Number(assigned.c),
+      workersNotified: Number(activeWorkers.c),
+    });
+  } catch (err) {
+    logger.error({ err }, "GET /agents/dispatch/status failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 const PaginationQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),

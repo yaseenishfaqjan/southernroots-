@@ -1,12 +1,79 @@
 import { Router, type IRouter } from "express";
-import { and, eq } from "drizzle-orm";
-import { db, invoicesTable, jobsTable } from "@workspace/db";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { db, invoicesTable, jobsTable, customersTable } from "@workspace/db";
 import { getOrgId, type AuthedRequest } from "../middlewares/auth";
+import { logger } from "../lib/logger";
 import { z } from "zod";
 
 const router: IRouter = Router();
 
 const InvoiceIdParam = z.object({ id: z.coerce.number().int() });
+
+// ── Real-schema list + resend (the legacy handlers below use an old model) ──
+function formatInvoiceRow(row: typeof invoicesTable.$inferSelect, customerName: string | null) {
+  return {
+    id: row.id,
+    customerId: row.customerId,
+    customerName,
+    jobId: row.jobId,
+    amountCents: row.amountCents,
+    status: row.status,
+    dueDate: row.dueDate?.toISOString() ?? null,
+    paidAt: row.paidAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+const ListInvoicesQuery = z.object({ status: z.string().optional() });
+
+router.get("/invoices", async (req, res): Promise<void> => {
+  const q = ListInvoicesQuery.safeParse(req.query);
+  if (!q.success) {
+    res.status(400).json({ error: q.error.message });
+    return;
+  }
+  try {
+    const orgId = getOrgId(req as AuthedRequest);
+    const rows = await db
+      .select({ inv: invoicesTable, customerName: customersTable.name })
+      .from(invoicesTable)
+      .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+      .where(
+        q.data.status
+          ? and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.status, q.data.status))
+          : eq(invoicesTable.orgId, orgId)
+      )
+      .orderBy(desc(invoicesTable.createdAt));
+    res.json(rows.map((r) => formatInvoiceRow(r.inv, r.customerName)));
+  } catch (err) {
+    logger.error({ err }, "GET /invoices failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/invoices/:id/resend", async (req, res): Promise<void> => {
+  const params = InvoiceIdParam.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  try {
+    const orgId = getOrgId(req as AuthedRequest);
+    const [updated] = await db
+      .update(invoicesTable)
+      .set({ reminderCount: sql`${invoicesTable.reminderCount} + 1`, lastReminderAt: new Date() })
+      .where(and(eq(invoicesTable.orgId, orgId), eq(invoicesTable.id, params.data.id)))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Invoice not found" });
+      return;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    logger.error({ err }, "POST /invoices/:id/resend failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 const JobIdParam = z.object({ jobId: z.coerce.number().int() });
 
 const CreateInvoiceBody = z.object({

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, AlertTriangle } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import { api, formatDate } from "../lib/api";
+import { useToast } from "../lib/toast";
 
 interface Escalation {
   id: number;
@@ -17,6 +18,7 @@ interface Escalation {
 
 export default function Escalations() {
   const qc = useQueryClient();
+  const toast = useToast();
 
   const { data: escalations, isLoading } = useQuery<Escalation[]>({
     queryKey: ["escalations"],
@@ -26,7 +28,11 @@ export default function Escalations() {
   const resolve = useMutation({
     mutationFn: (id: number) =>
       api.patch(`/escalations/${id}`, { status: "resolved" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["escalations"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["escalations"] });
+      toast("Escalation resolved");
+    },
+    onError: () => toast("Could not resolve the escalation", "error"),
   });
 
   const openCount =

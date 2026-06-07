@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Zap, MessageSquare, RefreshCw, Briefcase, HardHat } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import { api, formatDate, formatMoney } from "../lib/api";
+import { useToast } from "../lib/toast";
 
 interface Job {
   id: number;
@@ -31,6 +32,7 @@ interface DispatchStatus {
 
 export default function Dispatch() {
   const qc = useQueryClient();
+  const toast = useToast();
 
   const { data: unassignedJobs, isLoading: loadingJobs } = useQuery<Job[]>({
     queryKey: ["jobs-unassigned"],
@@ -56,14 +58,18 @@ export default function Dispatch() {
       qc.invalidateQueries({ queryKey: ["jobs-unassigned"] });
       qc.invalidateQueries({ queryKey: ["workers-active"] });
       qc.invalidateQueries({ queryKey: ["dispatch-status"] });
+      toast("Dispatch agent ran — crews assigned");
     },
+    onError: () => toast("Dispatch run failed", "error"),
   });
 
   const triggerBriefing = useMutation({
     mutationFn: () => api.post("/agents/briefing/trigger"),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["dispatch-status"] });
+      toast("Owner briefing generated");
     },
+    onError: () => toast("Briefing failed", "error"),
   });
 
   return (
