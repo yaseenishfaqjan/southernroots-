@@ -13,6 +13,7 @@
   "dependencies": {
     "@workspace/db": "workspace:*",
     "@workspace/api-types": "workspace:*",
+    "@workspace/api-zod": "workspace:*",
     "@anthropic-ai/sdk": "catalog:",
     "bullmq": "catalog:",
     "cookie-parser": "^1.4.7",

@@ -12,3 +12,6 @@ export * from "./ai-decisions";
 export * from "./agent-tasks";
 export * from "./kpi-snapshots";
 export * from "./notifications";
+export * from "./subcontractors";
+export * from "./audit-logs";
+export * from "./kpi-logs";
