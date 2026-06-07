@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { and, eq, desc, isNotNull, lte, sql } from "drizzle-orm";
-import { db, jobsTable, assignmentsTable, subcontractorsTable } from "@workspace/db";
+import { db, jobsTable, assignmentsTable, subcontractorsTable, customersTable } from "@workspace/db";
 import { getOrgId, type AuthedRequest } from "../middlewares/auth";
 import {
   ListJobsQueryParams,
-  CreateJobBody,
   GetJobParams,
   UpdateJobParams,
   UpdateJobBody,
@@ -17,40 +17,22 @@ import {
 
 const router: IRouter = Router();
 
-async function getJobWithAssignment(jobId: number, orgId: number) {
-  const [job] = await db.select().from(jobsTable).where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, jobId)));
-  if (!job) return null;
-
-  const [assignmentRow] = await db
-    .select({
-      id: assignmentsTable.id,
-      jobId: assignmentsTable.jobId,
-      subcontractorId: assignmentsTable.subcontractorId,
-      subName: subcontractorsTable.name,
-      subPay: assignmentsTable.subPay,
-      ownerProfit: assignmentsTable.ownerProfit,
-      status: assignmentsTable.status,
-      assignedAt: assignmentsTable.assignedAt,
-      completedAt: assignmentsTable.completedAt,
-    })
-    .from(assignmentsTable)
-    .leftJoin(subcontractorsTable, eq(assignmentsTable.subcontractorId, subcontractorsTable.id))
-    .where(and(eq(assignmentsTable.orgId, orgId), eq(assignmentsTable.jobId, jobId)));
-
+function formatJob(job: typeof jobsTable.$inferSelect) {
   return {
     ...job,
-    customerPrice: job.customerPrice ? parseFloat(job.customerPrice) : null,
-    assignment: assignmentRow
-      ? {
-          ...assignmentRow,
-          subPay: parseFloat(assignmentRow.subPay),
-          ownerProfit: parseFloat(assignmentRow.ownerProfit),
-          assignedAt: assignmentRow.assignedAt.toISOString(),
-          completedAt: assignmentRow.completedAt ? assignmentRow.completedAt.toISOString() : null,
-        }
-      : null,
+    scheduledDate: job.scheduledDate?.toISOString() ?? null,
+    completedAt: job.completedAt?.toISOString() ?? null,
     createdAt: job.createdAt.toISOString(),
+    updatedAt: job.updatedAt.toISOString(),
   };
+}
+
+async function getJob(jobId: number, orgId: number) {
+  const [job] = await db
+    .select()
+    .from(jobsTable)
+    .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, jobId)));
+  return job ? formatJob(job) : null;
 }
 
 router.get("/jobs", async (req, res): Promise<void> => {
@@ -69,72 +51,54 @@ router.get("/jobs", async (req, res): Promise<void> => {
   }
 
   const jobs = await query.orderBy(desc(jobsTable.createdAt));
+  res.json(jobs.map(formatJob));
+});
 
-  const jobIds = jobs.map((j) => j.id);
-  const assignments =
-    jobIds.length > 0
-      ? await db
-          .select({
-            id: assignmentsTable.id,
-            jobId: assignmentsTable.jobId,
-            subcontractorId: assignmentsTable.subcontractorId,
-            subName: subcontractorsTable.name,
-            subPay: assignmentsTable.subPay,
-            ownerProfit: assignmentsTable.ownerProfit,
-            status: assignmentsTable.status,
-            assignedAt: assignmentsTable.assignedAt,
-            completedAt: assignmentsTable.completedAt,
-          })
-          .from(assignmentsTable)
-          .leftJoin(subcontractorsTable, eq(assignmentsTable.subcontractorId, subcontractorsTable.id))
-          .where(eq(assignmentsTable.orgId, orgId))
-      : [];
-
-  const assignmentMap = new Map(assignments.map((a) => [a.jobId, a]));
-
-  res.json(
-    jobs.map((job) => {
-      const asgn = assignmentMap.get(job.id);
-      return {
-        ...job,
-        customerPrice: job.customerPrice ? parseFloat(job.customerPrice) : null,
-        assignment: asgn
-          ? {
-              ...asgn,
-              subPay: parseFloat(asgn.subPay),
-              ownerProfit: parseFloat(asgn.ownerProfit),
-              assignedAt: asgn.assignedAt.toISOString(),
-              completedAt: asgn.completedAt ? asgn.completedAt.toISOString() : null,
-            }
-          : null,
-        createdAt: job.createdAt.toISOString(),
-      };
-    })
-  );
+const CreateJobInput = z.object({
+  customerId: z.coerce.number().int(),
+  serviceType: z.string().min(1),
+  priceCents: z.coerce.number().int().nonnegative().default(0),
+  scheduledDate: z.string().nullish(),
+  notes: z.string().nullish(),
 });
 
 router.post("/jobs", async (req, res): Promise<void> => {
-  const parsed = CreateJobBody.safeParse(req.body);
+  const parsed = CreateJobInput.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-
   const orgId = getOrgId(req as AuthedRequest);
+
+  // Tenant safety: the customer must belong to this org.
+  const [customer] = await db
+    .select({ id: customersTable.id })
+    .from(customersTable)
+    .where(and(eq(customersTable.orgId, orgId), eq(customersTable.id, parsed.data.customerId)));
+  if (!customer) {
+    res.status(404).json({ error: "Customer not found" });
+    return;
+  }
+
   const [job] = await db
     .insert(jobsTable)
     .values({
       orgId,
-      ...parsed.data,
-      customerPrice: parsed.data.customerPrice != null ? String(parsed.data.customerPrice) : null,
+      customerId: parsed.data.customerId,
+      serviceType: parsed.data.serviceType,
+      priceCents: parsed.data.priceCents,
+      scheduledDate: parsed.data.scheduledDate ? new Date(parsed.data.scheduledDate) : null,
+      notes: parsed.data.notes ?? null,
+      status: "new",
     })
     .returning();
 
   res.status(201).json({
     ...job,
-    customerPrice: job.customerPrice ? parseFloat(job.customerPrice) : null,
-    assignment: null,
+    scheduledDate: job.scheduledDate?.toISOString() ?? null,
+    completedAt: job.completedAt?.toISOString() ?? null,
     createdAt: job.createdAt.toISOString(),
+    updatedAt: job.updatedAt.toISOString(),
   });
 });
 
@@ -147,61 +111,13 @@ router.get("/jobs/stale", async (req, res): Promise<void> => {
     .where(and(eq(jobsTable.orgId, orgId), sql`${jobsTable.status} = 'new' and ${jobsTable.createdAt} <= ${staleThreshold}`))
     .orderBy(desc(jobsTable.createdAt));
 
-  res.json(
-    jobs.map((job) => ({
-      ...job,
-      customerPrice: job.customerPrice ? parseFloat(job.customerPrice) : null,
-      assignment: null,
-      createdAt: job.createdAt.toISOString(),
-    }))
-  );
+  res.json(jobs.map(formatJob));
 });
 
 router.get("/jobs/recent", async (req, res): Promise<void> => {
   const orgId = getOrgId(req as AuthedRequest);
   const jobs = await db.select().from(jobsTable).where(eq(jobsTable.orgId, orgId)).orderBy(desc(jobsTable.createdAt)).limit(10);
-
-  const jobIds = jobs.map((j) => j.id);
-  const assignments =
-    jobIds.length > 0
-      ? await db
-          .select({
-            id: assignmentsTable.id,
-            jobId: assignmentsTable.jobId,
-            subcontractorId: assignmentsTable.subcontractorId,
-            subName: subcontractorsTable.name,
-            subPay: assignmentsTable.subPay,
-            ownerProfit: assignmentsTable.ownerProfit,
-            status: assignmentsTable.status,
-            assignedAt: assignmentsTable.assignedAt,
-            completedAt: assignmentsTable.completedAt,
-          })
-          .from(assignmentsTable)
-          .leftJoin(subcontractorsTable, eq(assignmentsTable.subcontractorId, subcontractorsTable.id))
-          .where(eq(assignmentsTable.orgId, orgId))
-      : [];
-
-  const assignmentMap = new Map(assignments.map((a) => [a.jobId, a]));
-
-  res.json(
-    jobs.map((job) => {
-      const asgn = assignmentMap.get(job.id);
-      return {
-        ...job,
-        customerPrice: job.customerPrice ? parseFloat(job.customerPrice) : null,
-        assignment: asgn
-          ? {
-              ...asgn,
-              subPay: parseFloat(asgn.subPay),
-              ownerProfit: parseFloat(asgn.ownerProfit),
-              assignedAt: asgn.assignedAt.toISOString(),
-              completedAt: asgn.completedAt ? asgn.completedAt.toISOString() : null,
-            }
-          : null,
-        createdAt: job.createdAt.toISOString(),
-      };
-    })
-  );
+  res.json(jobs.map(formatJob));
 });
 
 router.get("/jobs/:id", async (req, res): Promise<void> => {
@@ -212,7 +128,7 @@ router.get("/jobs/:id", async (req, res): Promise<void> => {
   }
 
   const orgId = getOrgId(req as AuthedRequest);
-  const job = await getJobWithAssignment(params.data.id, orgId);
+  const job = await getJob(params.data.id, orgId);
   if (!job) {
     res.status(404).json({ error: "Job not found" });
     return;
@@ -235,14 +151,23 @@ router.patch("/jobs/:id", async (req, res): Promise<void> => {
   }
 
   const orgId = getOrgId(req as AuthedRequest);
-  const updateData: Record<string, unknown> = { ...parsed.data };
-  if (parsed.data.customerPrice != null) {
-    updateData.customerPrice = String(parsed.data.customerPrice);
+  // Only set columns that actually exist on the jobs table.
+  const updateData: Partial<typeof jobsTable.$inferInsert> = {};
+  if (parsed.data.serviceType !== undefined) updateData.serviceType = parsed.data.serviceType;
+  if (parsed.data.status !== undefined) {
+    updateData.status = parsed.data.status;
+    if (parsed.data.status === "complete") updateData.completedAt = new Date();
+  }
+  if (parsed.data.notes !== undefined && parsed.data.notes !== null) updateData.notes = parsed.data.notes;
+
+  if (Object.keys(updateData).length === 0) {
+    res.status(400).json({ error: "No updatable fields provided" });
+    return;
   }
 
   const [updated] = await db
     .update(jobsTable)
-    .set(updateData as Parameters<typeof db.update>[0] extends infer T ? T : never)
+    .set(updateData)
     .where(and(eq(jobsTable.orgId, orgId), eq(jobsTable.id, params.data.id)))
     .returning();
 
@@ -251,7 +176,7 @@ router.patch("/jobs/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const job = await getJobWithAssignment(params.data.id, orgId);
+  const job = await getJob(params.data.id, orgId);
   res.json(job);
 });
 
