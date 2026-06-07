@@ -1,6 +1,6 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { Link } from "wouter";
-import { motion } from "framer-motion";
+import { motion, useInView, animate } from "framer-motion";
 import {
   Leaf,
   Zap,
@@ -15,6 +15,10 @@ import {
   Menu,
   X,
   Sparkles,
+  Star,
+  ChevronDown,
+  Clock,
+  ShieldCheck,
 } from "lucide-react";
 
 // Scroll-reveal wrapper
@@ -366,6 +370,11 @@ function CTA() {
           >
             Start your free trial <ArrowRight className="h-4 w-4" />
           </Link>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-green-50">
+            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-4 w-4" /> Bank-level security</span>
+            <span className="inline-flex items-center gap-1.5"><Clock className="h-4 w-4" /> Set up in minutes</span>
+            <span className="inline-flex items-center gap-1.5"><Check className="h-4 w-4" /> No credit card required</span>
+          </div>
         </Reveal>
       </div>
     </section>
@@ -393,6 +402,157 @@ function Footer() {
   );
 }
 
+// Animated number that counts up when scrolled into view
+function CountUp({ to, prefix = "", suffix = "", duration = 1.6 }: { to: number; prefix?: string; suffix?: string; duration?: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    if (!inView) return;
+    const controls = animate(0, to, { duration, ease: "easeOut", onUpdate: (v) => setVal(v) });
+    return () => controls.stop();
+  }, [inView, to, duration]);
+  return (
+    <span ref={ref}>
+      {prefix}
+      {Math.round(val).toLocaleString()}
+      {suffix}
+    </span>
+  );
+}
+
+function Integrations() {
+  const tools = ["OpenAI GPT-4o", "Anthropic Claude", "Google Maps", "Stripe", "Twilio", "Resend"];
+  return (
+    <section className="border-b border-gray-100 bg-white py-10">
+      <div className="mx-auto max-w-6xl px-5 text-center">
+        <Reveal>
+          <p className="text-sm font-medium uppercase tracking-wide text-gray-400">
+            Powered by the tools you already trust
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+            {tools.map((t) => (
+              <span key={t} className="text-base font-semibold text-gray-400 transition hover:text-gray-700">{t}</span>
+            ))}
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+function Outcomes() {
+  const items = [
+    { to: 38, prefix: "+", suffix: "%", label: "more jobs won with instant quotes" },
+    { to: 12, suffix: " hrs", label: "of admin saved every week" },
+    { to: 60, prefix: "<", suffix: "s", label: "average lead-to-quote time" },
+    { to: 24, suffix: "/7", label: "fully autonomous operation" },
+  ];
+  return (
+    <section className="bg-green-50 py-20">
+      <div className="mx-auto max-w-6xl px-5">
+        <Reveal>
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Real outcomes, not just features</h2>
+            <p className="mt-4 text-lg text-gray-600">What operators see after switching to autonomous operations.</p>
+          </div>
+        </Reveal>
+        <div className="mt-12 grid grid-cols-2 gap-8 md:grid-cols-4">
+          {items.map((it, i) => (
+            <Reveal key={it.label} delay={i * 0.08}>
+              <div className="text-center">
+                <div className="text-4xl font-extrabold text-green-600 sm:text-5xl">
+                  <CountUp to={it.to} prefix={it.prefix} suffix={it.suffix} />
+                </div>
+                <div className="mt-2 text-sm text-gray-600">{it.label}</div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const TESTIMONIALS = [
+  { quote: "We used to lose jobs because we couldn't quote fast enough. Now a quote goes out in under a minute — our close rate jumped immediately.", name: "Marcus W.", role: "Owner, GreenEdge Lawn Care", initials: "MW" },
+  { quote: "It feels like I hired an office manager, a dispatcher, and a collections team — except it never sleeps and costs a fraction.", name: "Devon P.", role: "Owner, Peachtree Property Care", initials: "DP" },
+  { quote: "The follow-ups and win-back texts alone paid for the whole thing. I just do the work and the money shows up.", name: "Sarah L.", role: "Owner, Bluegrass Lawns", initials: "SL" },
+];
+
+function Testimonials() {
+  return (
+    <section className="py-24">
+      <div className="mx-auto max-w-6xl px-5">
+        <Reveal>
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Loved by lawn care owners</h2>
+            <p className="mt-4 text-lg text-gray-600">Operators who got their time back.</p>
+          </div>
+        </Reveal>
+        <div className="mt-14 grid gap-6 md:grid-cols-3">
+          {TESTIMONIALS.map((t, i) => (
+            <Reveal key={t.name} delay={i * 0.08}>
+              <div className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="flex gap-0.5 text-green-500">
+                  {Array.from({ length: 5 }).map((_, j) => (
+                    <Star key={j} className="h-4 w-4 fill-current" />
+                  ))}
+                </div>
+                <p className="mt-4 flex-1 text-sm leading-relaxed text-gray-700">"{t.quote}"</p>
+                <div className="mt-5 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-sm font-semibold text-green-700">{t.initials}</div>
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">{t.name}</div>
+                    <div className="text-xs text-gray-500">{t.role}</div>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const FAQS = [
+  { q: "How fast can I get started?", a: "Minutes. Sign up, add your services, and your first AI quote can go out the same day — no setup fees, no credit card for the trial." },
+  { q: "How does the AI quote a lawn it's never seen?", a: "It pulls satellite imagery of the address, measures the maintainable turf area, and applies your pricing rules — then writes a friendly, branded quote automatically." },
+  { q: "Will it text and email my customers on its own?", a: "Yes — within the guardrails you set. It answers questions, sends quotes and invoices, and follows up on payments, escalating only the edge cases to you." },
+  { q: "Do I need technical skills?", a: "None. If you can use a phone, you can run Southern Roots Turf. The agents handle the back office; you handle the lawns." },
+  { q: "What does it cost?", a: "Plans start at $299/mo with a 14-day free trial. Cancel anytime — no contracts." },
+];
+
+function Faq() {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <section className="bg-gray-50 py-24">
+      <div className="mx-auto max-w-3xl px-5">
+        <Reveal>
+          <h2 className="text-center text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Frequently asked questions</h2>
+        </Reveal>
+        <div className="mt-10 space-y-3">
+          {FAQS.map((f, i) => (
+            <Reveal key={f.q} delay={i * 0.04}>
+              <div className="rounded-xl border border-gray-200 bg-white">
+                <button
+                  onClick={() => setOpen(open === i ? null : i)}
+                  className="flex w-full items-center justify-between px-5 py-4 text-left"
+                >
+                  <span className="text-sm font-semibold text-gray-900">{f.q}</span>
+                  <ChevronDown className={`h-5 w-5 flex-shrink-0 text-gray-400 transition-transform ${open === i ? "rotate-180" : ""}`} />
+                </button>
+                {open === i && <p className="px-5 pb-5 text-sm leading-relaxed text-gray-600">{f.a}</p>}
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Landing() {
   return (
     <div className="min-h-screen bg-white">
@@ -400,10 +560,14 @@ export default function Landing() {
       <main>
         <Hero />
         <Stats />
+        <Integrations />
         <Problem />
         <Features />
+        <Outcomes />
         <How />
+        <Testimonials />
         <Pricing />
+        <Faq />
         <CTA />
       </main>
       <Footer />
