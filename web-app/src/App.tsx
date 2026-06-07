@@ -1,4 +1,7 @@
 import { Router, Switch, Route } from "wouter";
+import { Loader2 } from "lucide-react";
+import { useAuth } from "./lib/auth";
+import Login from "./pages/Login";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Jobs from "./pages/Jobs";
@@ -10,6 +13,20 @@ import Decisions from "./pages/Decisions";
 import Dispatch from "./pages/Dispatch";
 
 export default function App() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <Loader2 className="h-6 w-6 animate-spin text-green-600" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login />;
+  }
+
   return (
     <Router>
       <Layout>

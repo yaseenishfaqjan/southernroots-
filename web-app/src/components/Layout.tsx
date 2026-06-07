@@ -9,8 +9,10 @@ import {
   Brain,
   MapPin,
   Leaf,
+  LogOut,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { useAuth } from "../lib/auth";
 
 const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -25,6 +27,7 @@ const navItems = [
 
 export default function Layout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
+  const { user, logout } = useAuth();
   return (
     <div className="flex h-screen bg-gray-50">
       <aside className="w-60 bg-white border-r border-gray-200 flex flex-col">
@@ -58,11 +61,30 @@ export default function Layout({ children }: { children: ReactNode }) {
             );
           })}
         </nav>
-        <div className="p-4 border-t border-gray-200">
-          <div className="text-xs text-gray-400">AI-Powered Dispatch</div>
-          <div className="flex items-center gap-1 mt-1">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-xs text-gray-600">All agents running</span>
+        <div className="p-4 border-t border-gray-200 space-y-3">
+          <div>
+            <div className="text-xs text-gray-400">AI-Powered Dispatch</div>
+            <div className="flex items-center gap-1 mt-1">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs text-gray-600">All agents running</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+            <div className="min-w-0">
+              <div className="truncate text-xs font-medium text-gray-700">
+                {user?.name ?? user?.email}
+              </div>
+              <div className="text-[10px] uppercase tracking-wide text-gray-400">
+                {user?.role}
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
       </aside>

@@ -1,10 +1,53 @@
 const BASE = "/api";
+const TOKEN_KEY = "srt_token";
+const USER_KEY = "srt_user";
+
+export interface AuthUser {
+  id?: number;
+  userId?: number;
+  email: string;
+  name?: string;
+  role: string;
+}
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setSession(token: string | null, user: AuthUser | null): void {
+  if (token) localStorage.setItem(TOKEN_KEY, token);
+  else localStorage.removeItem(TOKEN_KEY);
+  if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+  else localStorage.removeItem(USER_KEY);
+}
+
+export function getStoredUser(): AuthUser | null {
+  const raw = localStorage.getItem(USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AuthUser;
+  } catch {
+    return null;
+  }
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = getToken();
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     ...options,
   });
+
+  if (res.status === 401) {
+    // Token missing/expired — drop the session and let the app redirect to login.
+    setSession(null, null);
+    window.dispatchEvent(new Event("srt:unauthorized"));
+    throw new Error("Unauthorized");
+  }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`API ${path}: ${res.status} ${text}`);
