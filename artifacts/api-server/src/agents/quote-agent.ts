@@ -6,26 +6,16 @@ import {
   quotesTable,
   aiDecisionsTable,
 } from "@workspace/db";
-import { getOpenAI } from "../lib/openai";
 import { getAnthropic } from "../lib/anthropic";
+import { geocodeAddress, fetchSatelliteImage } from "../lib/maps";
+import { measureLawnFromImage, type LawnMeasurement } from "../lib/vision";
+import { priceQuote, type PricedService } from "../lib/pricing";
 import { sendSms } from "../lib/twilio";
 import { sendEmail } from "../lib/resend";
 import { logger } from "../lib/logger";
 
-interface QuoteService {
-  name: string;
-  price: number;
-  description: string;
-}
-
-interface GPTQuoteResult {
-  sqftEstimate: number;
-  complexity: "simple" | "moderate" | "complex";
-  services: QuoteService[];
-  totalMonthly: number;
-  totalOneTime: number;
-  reasoning: string;
-}
+// Confidence below this gets flagged on the quote for a human to eyeball.
+const LOW_CONFIDENCE_THRESHOLD = 0.5;
 
 export async function runQuoteAgent(
   customerId: number,
@@ -49,93 +39,102 @@ export async function runQuoteAgent(
     return;
   }
 
-  logger.info({ customerId, quoteId }, "Running quote agent");
+  logger.info({ customerId, quoteId }, "Running quote agent (satellite + vision)");
 
-  // Step 1: GPT-4o property analysis
-  let gptResult: GPTQuoteResult | null = null;
-  try {
-    const openai = getOpenAI();
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `You are a professional lawn care estimator. Analyze the address and return a JSON quote with this exact shape:
-{
-  "sqftEstimate": number,
-  "complexity": "simple" | "moderate" | "complex",
-  "services": [{"name": string, "price": number, "description": string}],
-  "totalMonthly": number,
-  "totalOneTime": number,
-  "reasoning": string
-}
-Pricing: mowing $45-$120, landscaping $150-$400, pressure_washing $80-$250, aeration $100-$200, hedges $60-$150.
-Use realistic values based on neighborhood type and address.`,
-        },
-        {
-          role: "user",
-          content: `Customer: ${customer.name}, Address: ${customer.address}. Services requested: ${JSON.stringify(quote.services)}`,
-        },
-      ],
-    });
-    gptResult = JSON.parse(
-      completion.choices[0].message.content ?? "{}"
-    ) as GPTQuoteResult;
-  } catch (err) {
-    logger.warn({ err }, "GPT-4o quote failed, using fallback pricing");
-    gptResult = {
-      sqftEstimate: 3500,
+  const servicesWanted = Array.isArray(quote.services)
+    ? (quote.services as unknown[]).map((s) => String(s))
+    : [];
+
+  // ── Step 1: Geocode the address ──────────────────────────────────────────
+  const geo = await geocodeAddress(customer.address);
+
+  // ── Step 2: Fetch satellite image + measure the lawn with a vision model ──
+  let measurement: LawnMeasurement | null = null;
+  let measured = false;
+  if (geo) {
+    const sat = await fetchSatelliteImage(geo.lat, geo.lng);
+    if (sat) {
+      measurement = await measureLawnFromImage(
+        sat.dataUrl,
+        sat.metersPerPixel,
+        sat.sizePx
+      );
+      measured = measurement !== null;
+    }
+  }
+
+  // Fallback when maps/vision are unavailable: a conservative heuristic so the
+  // pipeline still produces a quote rather than failing the lead.
+  if (!measurement) {
+    logger.warn(
+      { customerId },
+      "Falling back to heuristic measurement (geocode/satellite/vision unavailable)"
+    );
+    measurement = {
+      sqftLawn: 4000,
+      sqftDriveway: 600,
       complexity: "moderate",
-      services: [
-        {
-          name: "Lawn Mowing",
-          price: 75,
-          description: "Regular weekly mowing service",
-        },
-      ],
-      totalMonthly: 75,
-      totalOneTime: 0,
-      reasoning: "Fallback pricing (AI unavailable)",
+      confidence: 0.2,
+      reasoning: "Heuristic estimate — satellite measurement unavailable.",
     };
   }
 
-  // Save property data
-  const [existing] = await db
+  // ── Step 3: Deterministic pricing engine ─────────────────────────────────
+  const pricing = priceQuote({
+    sqftLawn: measurement.sqftLawn,
+    complexity: measurement.complexity,
+    servicesWanted,
+  });
+
+  const totalCents = Math.round(
+    (pricing.totalMonthly + pricing.totalOneTime) * 100
+  );
+  const lowConfidence = measurement.confidence < LOW_CONFIDENCE_THRESHOLD;
+
+  // ── Step 4: Persist property measurement ─────────────────────────────────
+  const [existingProperty] = await db
     .select()
     .from(propertiesTable)
     .where(eq(propertiesTable.customerId, customerId));
-  if (!existing) {
-    await db.insert(propertiesTable).values({
-      customerId,
-      address: customer.address,
-      sqftLawn: gptResult.sqftEstimate,
-      complexity: gptResult.complexity,
-      lastAnalyzedAt: new Date(),
-    });
+
+  const propertyValues = {
+    customerId,
+    address: geo?.formattedAddress ?? customer.address,
+    lat: geo?.lat ?? null,
+    lng: geo?.lng ?? null,
+    sqftLawn: measurement.sqftLawn,
+    sqftDriveway: measurement.sqftDriveway,
+    complexity: measurement.complexity,
+    lastAnalyzedAt: new Date(),
+  };
+
+  if (existingProperty) {
+    await db
+      .update(propertiesTable)
+      .set(propertyValues)
+      .where(eq(propertiesTable.id, existingProperty.id));
+  } else {
+    await db.insert(propertiesTable).values(propertyValues);
   }
 
-  const totalCents = Math.round(
-    (gptResult.totalMonthly + gptResult.totalOneTime) * 100
-  );
+  // ── Step 5: Update the quote record ──────────────────────────────────────
+  const reasoning =
+    `Lawn ${measurement.sqftLawn.toLocaleString()} sqft, ${measurement.complexity} complexity ` +
+    `(confidence ${(measurement.confidence * 100).toFixed(0)}%). ${measurement.reasoning}`;
 
-  // Update quote record
   await db
     .update(quotesTable)
     .set({
-      services: gptResult.services,
+      services: pricing.services,
       totalCents,
-      status: "sent",
-      aiReasoning: gptResult.reasoning,
+      status: lowConfidence ? "needs_review" : "sent",
+      aiReasoning: reasoning,
       sentAt: new Date(),
     })
     .where(eq(quotesTable.id, quoteId));
 
-  // Step 2: Claude writes SMS
-  let smsBody = `Hi ${customer.name}! Your quote for ${customer.address.split(",")[0]}: `;
-  smsBody += gptResult.services.map((s) => s.name).join(", ");
-  smsBody += ` = $${gptResult.totalMonthly}/mo. Reply YES to book! -Southern Roots Turf`;
-
+  // ── Step 6: Claude writes the customer-facing SMS (numbers come from us) ──
+  let smsBody = buildFallbackSms(customer.name, customer.address, pricing.totalMonthly);
   try {
     const anthropic = getAnthropic();
     const msg = await anthropic.messages.create({
@@ -144,68 +143,78 @@ Use realistic values based on neighborhood type and address.`,
       messages: [
         {
           role: "user",
-          content: `Write a friendly SMS quote under 160 chars for lawn care customer ${customer.name} at ${customer.address.split(",")[0]}. Services: ${gptResult.services.map((s) => `${s.name} $${s.price}`).join(", ")}. Monthly total: $${gptResult.totalMonthly}. Include a soft call-to-action. Sign off as "Southern Roots Turf".`,
+          content:
+            `Write a friendly SMS quote under 160 chars for lawn-care customer ${customer.name} ` +
+            `at ${customer.address.split(",")[0]}. We measured their lawn at ` +
+            `${measurement.sqftLawn.toLocaleString()} sqft. Services: ` +
+            `${pricing.services.map((s) => `${s.name} $${s.price}${s.unit === "monthly" ? "/mo" : ""}`).join(", ")}. ` +
+            `Monthly total: $${pricing.totalMonthly}/mo. Include a soft call-to-action. ` +
+            `Sign off as "Southern Roots Turf".`,
         },
       ],
     });
-    const claudeText =
-      msg.content[0].type === "text" ? msg.content[0].text : smsBody;
+    const claudeText = msg.content[0]?.type === "text" ? msg.content[0].text : smsBody;
     if (claudeText.length <= 160) smsBody = claudeText;
   } catch (err) {
     logger.warn({ err }, "Claude SMS failed, using template");
   }
 
-  // Step 3: Send SMS
-  if (customer.phone) {
+  // ── Step 7: Send SMS + email ─────────────────────────────────────────────
+  if (customer.phone && !lowConfidence) {
     await sendSms(customer.phone, smsBody).catch((err) =>
       logger.warn({ err }, "SMS send failed")
     );
   }
-
-  // Step 4: Send email
-  const emailHtml = buildQuoteEmail(customer.name, gptResult, quoteId);
-  if (customer.email) {
+  if (customer.email && !lowConfidence) {
     await sendEmail({
       to: customer.email,
-      subject: `Your Southern Roots Turf Quote — $${gptResult.totalMonthly}/mo`,
-      html: emailHtml,
+      subject: `Your Southern Roots Turf Quote — $${pricing.totalMonthly}/mo`,
+      html: buildQuoteEmail(customer.name, measurement, pricing.services, pricing.totalMonthly, quoteId),
     }).catch((err) => logger.warn({ err }, "Email send failed"));
   }
 
-  // Step 5: Log AI decision
+  // ── Step 8: Log the AI decision for auditability ─────────────────────────
   await db.insert(aiDecisionsTable).values({
     agent: "quote",
-    input: {
-      customerId,
-      address: customer.address,
-      services: quote.services,
-    },
-    output: gptResult,
-    reasoning: gptResult.reasoning,
+    input: { customerId, address: customer.address, servicesWanted },
+    output: { measurement, pricing, measured, lowConfidence },
+    reasoning,
   });
 
-  logger.info({ customerId, quoteId, totalCents }, "Quote agent complete");
+  logger.info(
+    { customerId, quoteId, totalCents, measured, confidence: measurement.confidence, lowConfidence },
+    "Quote agent complete"
+  );
+}
+
+function buildFallbackSms(name: string, address: string, totalMonthly: number): string {
+  return (
+    `Hi ${name}! Your Southern Roots Turf quote for ${address.split(",")[0]}: ` +
+    `$${totalMonthly}/mo. Reply YES to book!`
+  );
 }
 
 function buildQuoteEmail(
   name: string,
-  quote: GPTQuoteResult,
+  measurement: LawnMeasurement,
+  services: PricedService[],
+  totalMonthly: number,
   quoteId: number
 ): string {
-  const rows = quote.services
+  const rows = services
     .map(
       (s) => `
     <tr>
       <td style="padding:8px;border-bottom:1px solid #eee">${s.name}</td>
       <td style="padding:8px;border-bottom:1px solid #eee">${s.description}</td>
-      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${s.price}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right">$${s.price}${s.unit === "monthly" ? "/mo" : ""}</td>
     </tr>`
     )
     .join("");
   return `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
     <h1 style="color:#16a34a">Southern Roots Turf</h1>
     <p>Hi ${name},</p>
-    <p>Here is your personalized lawn care quote. Estimated lawn size: <strong>${quote.sqftEstimate.toLocaleString()} sqft</strong> (${quote.complexity} complexity).</p>
+    <p>We measured your property from satellite imagery — lawn area <strong>${measurement.sqftLawn.toLocaleString()} sqft</strong> (${measurement.complexity} complexity). Here is your personalized quote:</p>
     <table style="width:100%;border-collapse:collapse">
       <thead><tr style="background:#f0fdf4">
         <th style="padding:8px;text-align:left">Service</th>
@@ -214,7 +223,7 @@ function buildQuoteEmail(
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr><td colspan="2" style="padding:8px;font-weight:bold">Monthly Total</td>
-        <td style="padding:8px;font-weight:bold;text-align:right;color:#16a34a">$${quote.totalMonthly}/mo</td></tr></tfoot>
+        <td style="padding:8px;font-weight:bold;text-align:right;color:#16a34a">$${totalMonthly}/mo</td></tr></tfoot>
     </table>
     <p style="margin-top:20px"><a href="${process.env.APP_URL ?? "http://localhost:5173"}/client/request?quoteId=${quoteId}"
       style="background:#16a34a;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Accept This Quote</a></p>
