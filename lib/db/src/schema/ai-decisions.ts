@@ -1,6 +1,6 @@
 import { pgTable, text, serial, timestamp, jsonb, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 export const aiDecisionsTable = pgTable("ai_decisions", {
   id: serial("id").primaryKey(),

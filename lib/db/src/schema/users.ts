@@ -1,6 +1,6 @@
 import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 // Application users (staff) — owners, dispatchers, and crew members who log in.
 // Customers are NOT users; they authenticate via the client portal magic-link flow.

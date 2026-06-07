@@ -1,6 +1,6 @@
 import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 // Single-use tokens for password reset and email verification.
 export const authTokensTable = pgTable("auth_tokens", {

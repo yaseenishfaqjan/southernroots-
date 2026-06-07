@@ -1,6 +1,6 @@
 import { pgTable, text, uuid, timestamp, jsonb, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 export const agentTasksTable = pgTable("agent_tasks", {
   id: uuid("id").defaultRandom().primaryKey(),

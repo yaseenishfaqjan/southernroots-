@@ -1,6 +1,6 @@
 import { pgTable, serial, timestamp, integer, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 export const kpiSnapshotsTable = pgTable("kpi_snapshots", {
   id: serial("id").primaryKey(),

@@ -1,6 +1,6 @@
 import { pgTable, text, serial, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
-import { z } from "zod";
+import { z } from "zod/v4";
 
 // A tenant. Every business row in the system belongs to exactly one organization.
 export const organizationsTable = pgTable("organizations", {
