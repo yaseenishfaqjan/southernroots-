@@ -11,6 +11,12 @@ out-tsc
 # dependencies
 node_modules
 
+# env / secrets
+.env
+.env.local
+*.env
+pnpm-lock.yaml.bak
+
 # IDEs and editors
 /.idea
 .project
