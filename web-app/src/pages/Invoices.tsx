@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
+import { TableSkeleton } from "../components/Skeleton";
 import { api, formatMoney, formatDate } from "../lib/api";
 import { useToast } from "../lib/toast";
 
@@ -95,16 +96,7 @@ export default function Invoices() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {isLoading && (
-              <tr>
-                <td
-                  colSpan={6}
-                  className="px-6 py-8 text-center text-gray-400"
-                >
-                  Loading invoices...
-                </td>
-              </tr>
-            )}
+            {isLoading && <TableSkeleton rows={5} cols={6} />}
             {invoices?.map((inv) => (
               <tr
                 key={inv.id}

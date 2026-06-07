@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, X, Loader2, Users } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Plus, X, Loader2, Users, Phone, Mail, MapPin } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
+import { TableSkeleton } from "../components/Skeleton";
 import { api, formatMoney, formatDate } from "../lib/api";
 import { useToast } from "../lib/toast";
 
@@ -17,6 +19,24 @@ interface Customer {
   address: string | null;
 }
 
+interface CustomerJob {
+  id: number;
+  serviceType: string;
+  status: string;
+  priceCents: number;
+  scheduledDate: string | null;
+}
+interface CustomerInvoice {
+  id: number;
+  amountCents: number;
+  status: string;
+  dueDate: string | null;
+}
+interface CustomerDetail extends Customer {
+  jobs: CustomerJob[];
+  invoices: CustomerInvoice[];
+}
+
 function ChurnRiskBar({ score }: { score: number | null }) {
   if (score === null || score === undefined) return <span className="text-gray-300 text-xs">—</span>;
   const pct = Math.round(score * 100);
@@ -28,6 +48,104 @@ function ChurnRiskBar({ score }: { score: number | null }) {
       </div>
       <span className="text-xs text-gray-500">{pct}%</span>
     </div>
+  );
+}
+
+function CustomerDrawer({ id, onClose }: { id: number; onClose: () => void }) {
+  const { data, isLoading } = useQuery<CustomerDetail>({
+    queryKey: ["customer", id],
+    queryFn: () => api.get(`/customers/${id}`),
+  });
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 z-40 bg-black/30"
+      />
+      <motion.div
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "tween", duration: 0.25 }}
+        className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto bg-white shadow-2xl"
+      >
+        <div className="flex items-center justify-between border-b border-gray-200 p-5">
+          <h2 className="text-lg font-semibold text-gray-900">{data?.name ?? "Customer"}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X className="h-5 w-5" /></button>
+        </div>
+
+        {isLoading || !data ? (
+          <div className="flex h-40 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-green-600" /></div>
+        ) : (
+          <div className="space-y-6 p-5">
+            <div className="flex flex-wrap gap-2">
+              <StatusBadge status={data.tier} />
+              <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                {formatMoney(data.mrr ?? 0)}/mo
+              </span>
+            </div>
+
+            <div className="space-y-2 text-sm text-gray-700">
+              {data.phone && <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-gray-400" /> {data.phone}</div>}
+              {data.email && <div className="flex items-center gap-2"><Mail className="h-4 w-4 text-gray-400" /> {data.email}</div>}
+              {data.address && <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-gray-400" /> {data.address}</div>}
+              <div className="text-xs text-gray-400">Customer since {formatDate(data.createdAt)}</div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900">Jobs</h3>
+                <span className="text-xs text-gray-400">{data.jobs?.length ?? 0}</span>
+              </div>
+              {data.jobs?.length ? (
+                <div className="space-y-2">
+                  {data.jobs.map((j) => (
+                    <div key={j.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{j.serviceType.replace(/_/g, " ")}</div>
+                        <div className="text-xs text-gray-500">{formatDate(j.scheduledDate)}</div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-gray-900">{formatMoney(j.priceCents)}</span>
+                        <StatusBadge status={j.status} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No jobs yet.</p>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900">Invoices</h3>
+                <span className="text-xs text-gray-400">{data.invoices?.length ?? 0}</span>
+              </div>
+              {data.invoices?.length ? (
+                <div className="space-y-2">
+                  {data.invoices.map((inv) => (
+                    <div key={inv.id} className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">{formatMoney(inv.amountCents)}</div>
+                        <div className="text-xs text-gray-500">Due {formatDate(inv.dueDate)}</div>
+                      </div>
+                      <StatusBadge status={inv.status} />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">No invoices yet.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </>
   );
 }
 
@@ -115,6 +233,7 @@ function NewCustomerModal({ onClose }: { onClose: () => void }) {
 
 export default function Customers() {
   const [showNew, setShowNew] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const { data: customers, isLoading } = useQuery<Customer[]>({
     queryKey: ["customers"],
     queryFn: () => api.get("/customers?sort=mrr"),
@@ -136,6 +255,9 @@ export default function Customers() {
       </div>
 
       {showNew && <NewCustomerModal onClose={() => setShowNew(false)} />}
+      <AnimatePresence>
+        {selectedId && <CustomerDrawer id={selectedId} onClose={() => setSelectedId(null)} />}
+      </AnimatePresence>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <table className="w-full">
@@ -147,11 +269,9 @@ export default function Customers() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {isLoading && (
-              <tr><td colSpan={7} className="px-6 py-8 text-center text-gray-400">Loading customers...</td></tr>
-            )}
+            {isLoading && <TableSkeleton rows={5} cols={7} />}
             {customers?.map((c) => (
-              <tr key={c.id} className="hover:bg-gray-50">
+              <tr key={c.id} onClick={() => setSelectedId(c.id)} className="cursor-pointer hover:bg-gray-50">
                 <td className="px-6 py-4">
                   <p className="text-sm font-medium text-gray-900">{c.name}</p>
                   {c.address && <p className="text-xs text-gray-400 mt-0.5">{c.address}</p>}

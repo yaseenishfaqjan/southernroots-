@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, X, Loader2 } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
+import { TableSkeleton } from "../components/Skeleton";
 import { api, formatMoney, formatDate } from "../lib/api";
 import { useToast } from "../lib/toast";
 
@@ -222,13 +223,7 @@ export default function Jobs() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {isLoading && (
-              <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-400">
-                  Loading...
-                </td>
-              </tr>
-            )}
+            {isLoading && <TableSkeleton rows={5} cols={6} />}
             {jobs?.map((job) => (
               <tr key={job.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm text-gray-500">#{job.id}</td>

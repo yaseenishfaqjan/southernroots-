@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, X, Loader2, HardHat } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
+import { TableSkeleton } from "../components/Skeleton";
 import { api } from "../lib/api";
 import { useToast } from "../lib/toast";
 
@@ -151,9 +152,7 @@ export default function Workers() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {isLoading && (
-              <tr><td colSpan={8} className="px-6 py-8 text-center text-gray-400">Loading workers...</td></tr>
-            )}
+            {isLoading && <TableSkeleton rows={5} cols={8} />}
             {workers?.map((w) => (
               <tr key={w.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 text-sm font-medium text-gray-900">{w.name}</td>
