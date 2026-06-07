@@ -6,11 +6,9 @@ import {
   quotesTable,
   aiDecisionsTable,
 } from "@workspace/db";
-import { getAnthropic } from "../lib/anthropic";
 import { geocodeAddress, fetchSatelliteImage } from "../lib/maps";
 import { measureLawnFromImage, type LawnMeasurement } from "../lib/vision";
 import { priceQuote, type PricedService } from "../lib/pricing";
-import { sendSms } from "../lib/twilio";
 import { sendEmail } from "../lib/resend";
 import { logger } from "../lib/logger";
 
@@ -135,44 +133,17 @@ export async function runQuoteAgent(
     })
     .where(and(eq(quotesTable.orgId, orgId), eq(quotesTable.id, quoteId)));
 
-  // ── Step 6: Claude writes the customer-facing SMS (numbers come from us) ──
-  let smsBody = buildFallbackSms(customer.name, customer.address, pricing.totalMonthly);
-  try {
-    const anthropic = getAnthropic();
-    const msg = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 200,
-      messages: [
-        {
-          role: "user",
-          content:
-            `Write a friendly SMS quote under 160 chars for lawn-care customer ${customer.name} ` +
-            `at ${customer.address.split(",")[0]}. We measured their lawn at ` +
-            `${measurement.sqftLawn.toLocaleString()} sqft. Services: ` +
-            `${pricing.services.map((s) => `${s.name} $${s.price}${s.unit === "monthly" ? "/mo" : ""}`).join(", ")}. ` +
-            `Monthly total: $${pricing.totalMonthly}/mo. Include a soft call-to-action. ` +
-            `Sign off as "Southern Roots Turf".`,
-        },
-      ],
-    });
-    const claudeText = msg.content[0]?.type === "text" ? msg.content[0].text : smsBody;
-    if (claudeText.length <= 160) smsBody = claudeText;
-  } catch (err) {
-    logger.warn({ err }, "Claude SMS failed, using template");
-  }
-
-  // ── Step 7: Send SMS + email ─────────────────────────────────────────────
-  if (customer.phone && !lowConfidence) {
-    await sendSms(customer.phone, smsBody).catch((err) =>
-      logger.warn({ err }, "SMS send failed")
-    );
-  }
+  // ── Step 6: Email the quote to the customer (email-first — no SMS) ────────
   if (customer.email && !lowConfidence) {
     await sendEmail({
       to: customer.email,
       subject: `Your Southern Roots Turf Quote — $${pricing.totalMonthly}/mo`,
       html: buildQuoteEmail(customer.name, measurement, pricing.services, pricing.totalMonthly, quoteId),
     }).catch((err) => logger.warn({ err }, "Email send failed"));
+  } else if (lowConfidence) {
+    logger.info({ customerId, quoteId }, "Quote held for review (low confidence) — not emailed");
+  } else {
+    logger.info({ customerId, quoteId }, "Customer has no email on file — quote not emailed");
   }
 
   // ── Step 8: Log the AI decision for auditability ─────────────────────────
@@ -187,13 +158,6 @@ export async function runQuoteAgent(
   logger.info(
     { customerId, quoteId, totalCents, measured, confidence: measurement.confidence, lowConfidence },
     "Quote agent complete"
-  );
-}
-
-function buildFallbackSms(name: string, address: string, totalMonthly: number): string {
-  return (
-    `Hi ${name}! Your Southern Roots Turf quote for ${address.split(",")[0]}: ` +
-    `$${totalMonthly}/mo. Reply YES to book!`
   );
 }
 

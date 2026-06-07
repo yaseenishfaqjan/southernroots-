@@ -8,8 +8,7 @@ import {
   aiDecisionsTable,
 } from "@workspace/db";
 import { getOpenAI } from "../lib/openai";
-import { getAnthropic } from "../lib/anthropic";
-import { sendSms } from "../lib/twilio";
+import { sendEmail } from "../lib/resend";
 import { logger } from "../lib/logger";
 
 function calcChurnRisk(
@@ -117,25 +116,30 @@ export async function runChurnPrevention(orgId: number): Promise<void> {
       }
 
       try {
-        const anthropic = getAnthropic();
-        const msg = await anthropic.messages.create({
-          model: "claude-3-5-sonnet-20241022",
-          max_tokens: 200,
+        const ai = getOpenAI();
+        const winback = await ai.chat.completions.create({
+          model: "gpt-4o-mini",
+          max_tokens: 180,
           messages: [
             {
               role: "user",
-              content: `Write a warm win-back SMS under 140 chars for ${customer.name}. Context: ${daysSinceLastJob} days since last service. Retention plan: ${retentionAction}. Tone: caring, never desperate. Sign as "Southern Roots".`,
+              content: `Write a warm win-back email (2-3 sentences) for ${customer.name}. Context: ${daysSinceLastJob} days since last service. Retention plan: ${retentionAction}. Tone: caring, never desperate. Sign as "Southern Roots Turf".`,
             },
           ],
         });
-        const text =
-          msg.content[0].type === "text" ? msg.content[0].text : smsBody;
-        if (text.length <= 140) smsBody = text;
+        const text = winback.choices[0]?.message?.content;
+        if (text) smsBody = text;
       } catch {
         /* use template */
       }
 
-      await sendSms(customer.phone, smsBody).catch(() => {});
+      if (customer.email) {
+        await sendEmail({
+          to: customer.email,
+          subject: "We'd love to have you back 🌱",
+          html: `<p>${smsBody.replace(/\n/g, "<br>")}</p>`,
+        }).catch(() => {});
+      }
 
       await db.insert(aiDecisionsTable).values({
         orgId,

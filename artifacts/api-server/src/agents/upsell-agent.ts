@@ -5,8 +5,8 @@ import {
   jobsTable,
   aiDecisionsTable,
 } from "@workspace/db";
-import { getAnthropic } from "../lib/anthropic";
-import { sendSms } from "../lib/twilio";
+import { getOpenAI } from "../lib/openai";
+import { sendEmail } from "../lib/resend";
 import { logger } from "../lib/logger";
 
 interface Opportunity {
@@ -106,29 +106,34 @@ export async function runUpsellScan(orgId: number): Promise<void> {
 
   let sent = 0;
   for (const opp of top20) {
-    let smsBody = `Hi ${opp.customer.name}! Time to upgrade your lawn care with ${opp.suggestedService}. Reply for a free quote! -Southern Roots`;
+    let body = `Hi ${opp.customer.name}, it could be a great time to add ${opp.suggestedService} to your lawn care. Just reply to this email for a free quote! — Southern Roots Turf`;
 
     try {
-      const anthropic = getAnthropic();
-      const msg = await anthropic.messages.create({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 200,
+      const openai = getOpenAI();
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        max_tokens: 180,
         messages: [
           {
             role: "user",
-            content: `Write a warm, brief SMS under 140 chars for lawn care customer ${opp.customer.name}. Upsell opportunity: ${opp.trigger}. Suggested service: ${opp.suggestedService}. Never be pushy. Soft call-to-action. Sign as "Southern Roots".`,
+            content: `Write a warm, brief email (2-3 sentences) for lawn-care customer ${opp.customer.name}. Upsell opportunity: ${opp.trigger}. Suggested service: ${opp.suggestedService}. Never be pushy. Soft call-to-action. Sign as "Southern Roots Turf".`,
           },
         ],
       });
-      const text =
-        msg.content[0].type === "text" ? msg.content[0].text : smsBody;
-      if (text.length <= 140) smsBody = text;
+      const text = completion.choices[0]?.message?.content;
+      if (text) body = text;
     } catch {
       /* use template */
     }
 
-    await sendSms(opp.customer.phone, smsBody).catch(() => {});
-    sent++;
+    if (opp.customer.email) {
+      await sendEmail({
+        to: opp.customer.email,
+        subject: "A quick idea for your lawn 🌱",
+        html: `<p>${body.replace(/\n/g, "<br>")}</p>`,
+      }).catch(() => {});
+      sent++;
+    }
   }
 
   await db.insert(aiDecisionsTable).values({

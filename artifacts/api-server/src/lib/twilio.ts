@@ -1,22 +1,7 @@
-import twilio from "twilio";
+import { logger } from "./logger";
 
-let _client: ReturnType<typeof twilio> | null = null;
-
-export function getTwilio() {
-  if (!_client) {
-    _client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  }
-  return _client;
-}
-
-export async function sendSms(to: string, body: string): Promise<void> {
-  if (!process.env.TWILIO_ACCOUNT_SID) {
-    return; // skip if not configured
-  }
-  const client = getTwilio();
-  await client.messages.create({
-    from: process.env.TWILIO_PHONE_NUMBER!,
-    to,
-    body,
-  });
+// SMS is intentionally DISABLED — this product is email-first (Resend).
+// sendSms is a safe no-op so existing call sites never invoke Twilio.
+export async function sendSms(to: string, _body: string): Promise<void> {
+  logger.debug({ to }, "SMS disabled (email-first) — skipping");
 }
