@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from "react";
+import { Link, useLocation } from "wouter";
 import { Leaf, Loader2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 
-export default function Login() {
+export default function Login({ initialMode = "login" }: { initialMode?: "login" | "signup" }) {
   const { login, signup } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [, navigate] = useLocation();
+  const [mode, setMode] = useState<"login" | "signup">(initialMode);
   const [orgName, setOrgName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -24,6 +26,7 @@ export default function Login() {
       } else {
         await login(email.trim(), password);
       }
+      navigate("/"); // land on the dashboard after auth
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (isSignup && /409/.test(msg)) setError("An account with this email already exists.");
@@ -40,10 +43,13 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-sm">
+        <Link href="/" className="mb-6 block text-center text-sm text-gray-500 hover:text-gray-800">
+          ← Back to home
+        </Link>
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-green-600">
+          <Link href="/" className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-green-600">
             <Leaf className="h-6 w-6 text-white" />
-          </div>
+          </Link>
           <h1 className="text-xl font-bold text-gray-900">Southern Roots Turf</h1>
           <p className="text-sm text-gray-500">
             {isSignup ? "Start your 14-day free trial" : "Owner Dashboard"}

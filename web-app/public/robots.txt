@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /billing
+Disallow: /jobs
+Disallow: /customers
+Disallow: /workers
+Disallow: /invoices
+Disallow: /escalations
+Disallow: /dispatch
+Disallow: /ai/
+
+Sitemap: https://southernrootsturf.com/sitemap.xml

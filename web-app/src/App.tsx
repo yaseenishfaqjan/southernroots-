@@ -1,6 +1,7 @@
 import { Router, Switch, Route } from "wouter";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "./lib/auth";
+import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
@@ -31,10 +32,21 @@ export default function App() {
     );
   }
 
+  // Logged out → public marketing site + auth screens.
   if (!user) {
-    return <Login />;
+    return (
+      <Router>
+        <Switch>
+          <Route path="/login">{() => <Login initialMode="login" />}</Route>
+          <Route path="/signup">{() => <Login initialMode="signup" />}</Route>
+          <Route path="/" component={Landing} />
+          <Route component={Landing} />
+        </Switch>
+      </Router>
+    );
   }
 
+  // Logged in → the owner dashboard.
   return (
     <Router>
       <Layout>
