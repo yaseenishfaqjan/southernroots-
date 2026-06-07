@@ -5,6 +5,8 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
+import QuotePage from "./pages/QuotePage";
+import LeadForm from "./pages/LeadForm";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Jobs from "./pages/Jobs";
@@ -19,10 +21,12 @@ import Billing from "./pages/Billing";
 export default function App() {
   const { user, loading } = useAuth();
 
-  // Public, no-auth pages reachable from email links.
+  // Public, no-auth pages reachable from email links / shared links.
   const path = window.location.pathname;
   if (path === "/reset-password") return <ResetPassword />;
   if (path === "/verify-email") return <VerifyEmail />;
+  if (path.startsWith("/quote/")) return <QuotePage />;  // customer accepts a quote
+  if (path.startsWith("/q/")) return <LeadForm />;        // customer requests a quote
 
   if (loading) {
     return (

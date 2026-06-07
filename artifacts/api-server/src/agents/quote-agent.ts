@@ -192,7 +192,7 @@ function buildQuoteEmail(
       <tfoot><tr><td colspan="2" style="padding:8px;font-weight:bold">Monthly Total</td>
         <td style="padding:8px;font-weight:bold;text-align:right;color:#16a34a">$${totalMonthly}/mo</td></tr></tfoot>
     </table>
-    <p style="margin-top:20px"><a href="${process.env.APP_URL ?? "http://localhost:5173"}/client/request?quoteId=${quoteId}"
+    <p style="margin-top:20px"><a href="${process.env.PUBLIC_APP_URL ?? "http://localhost:5173"}/quote/${quoteId}"
       style="background:#16a34a;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Accept This Quote</a></p>
     <p style="color:#666;font-size:12px">Southern Roots Turf — Professional Lawn Care</p>
   </body></html>`;
