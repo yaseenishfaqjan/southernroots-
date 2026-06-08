@@ -59,7 +59,7 @@ services:
       dockerfile: web-app/Dockerfile.prod
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${WEB_PORT:-8090}:80"
     depends_on:
       - api
 

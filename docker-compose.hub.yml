@@ -53,7 +53,7 @@ services:
     image: ${DOCKERHUB_USER}/srt-web:latest
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${WEB_PORT:-8090}:80"
     depends_on:
       - api
 
