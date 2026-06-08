@@ -1,0 +1,67 @@
+# Production stack — one command on any VPS:  docker compose -f docker-compose.prod.yml up -d --build
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: southern_roots
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  # One-off: create/update the database schema, then exit.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      target: build
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/southern_roots
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      node lib/db/node_modules/.bin/drizzle-kit push --force
+      --dialect=postgresql
+      --schema=lib/db/src/schema/index.ts
+      --url=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/southern_roots
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/southern_roots
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  web:
+    build:
+      context: .
+      dockerfile: web-app/Dockerfile.prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
