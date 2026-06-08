@@ -3,7 +3,7 @@ FROM node:22-slim AS build
 RUN corepack enable && corepack prepare pnpm@11.1.3 --activate
 WORKDIR /app
 COPY . .
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --no-frozen-lockfile --ignore-scripts
 RUN node web-app/node_modules/vite/bin/vite.js build web-app
 
 # ── Serve with nginx (also proxies /api -> api container) ────────────────────
