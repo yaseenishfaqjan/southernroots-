@@ -30,7 +30,7 @@ services:
       postgres:
         condition: service_healthy
     command: >
-      node lib/db/node_modules/.bin/drizzle-kit push --force
+      node lib/db/node_modules/drizzle-kit/bin.cjs push --force
       --dialect=postgresql
       --schema=lib/db/src/schema/index.ts
       --url=postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/southern_roots
