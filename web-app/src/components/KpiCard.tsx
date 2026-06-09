@@ -27,16 +27,16 @@ export default function KpiCard({
   color = "green",
 }: Props) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm text-gray-500 font-medium">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+    <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs sm:text-sm text-gray-500 font-medium">{title}</p>
+          <p className="text-xl sm:text-2xl font-bold text-gray-900 mt-1 truncate">{value}</p>
           {subtitle && (
-            <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">{subtitle}</p>
           )}
         </div>
-        <div className={`p-3 rounded-lg ${colorMap[color]}`}>{icon}</div>
+        <div className={`p-2.5 sm:p-3 rounded-lg flex-shrink-0 ${colorMap[color]}`}>{icon}</div>
       </div>
       {trend && (
         <div

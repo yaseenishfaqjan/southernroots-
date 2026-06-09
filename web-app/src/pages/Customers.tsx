@@ -259,8 +259,8 @@ export default function Customers() {
         {selectedId && <CustomerDrawer id={selectedId} onClose={() => setSelectedId(null)} />}
       </AnimatePresence>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <table className="w-full">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-x-auto">
+        <table className="w-full min-w-[640px]">
           <thead>
             <tr className="border-b border-gray-200 bg-gray-50">
               {["Name", "Phone", "Email", "Tier", "MRR", "Churn Risk", "Member Since"].map((h) => (
